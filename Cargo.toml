@@ -1,0 +1,11 @@
+[package]
+name = "libinjection-rs"
+version = "0.1.0"
+authors = ["Paul Callahan <paul@tcell.io>"]
+
+[dependencies]
+
+
+[lib]
+name = "injection"
+crate-type = ["cdylib", "lib"]
