@@ -1,302 +1,509 @@
-use libinjection_html5::Html5Type;
-use libinjection_html5::{H5State, Html5Flags};
-use libinjection_html5::{h5_state_eof, libinjection_h5_init, libinjection_h5_next};
-
-use std::ptr;
-
 extern {
-    //todo: get rid of
-    fn memchr(__s: *const ::std::os::raw::c_void, __c: i32, __n: usize) -> *mut ::std::os::raw::c_void;
+    fn libinjection_h5_init(
+        hs : *mut h5_state, s : *const u8, len : usize, arg4 : html5_flags
+    );
+    fn libinjection_h5_next(hs : *mut h5_state) -> i32;
+    fn memchr(
+        __s : *const ::std::os::raw::c_void, __c : i32, __n : usize
+    ) -> *mut ::std::os::raw::c_void;
 }
 
-static mut GS_HEX_DECODE_MAP: [i32; 256] = [
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 256, 256,
-    256, 256, 256, 256, 256, 10, 11, 12, 13, 14, 15, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 10, 11, 12, 13, 14, 15, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-    256, 256, 256, 256
-];
+static mut gsHexDecodeMap
+    : [i32; 256]
+    = [   256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          0i32,
+          1i32,
+          2i32,
+          3i32,
+          4i32,
+          5i32,
+          6i32,
+          7i32,
+          8i32,
+          9i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          10i32,
+          11i32,
+          12i32,
+          13i32,
+          14i32,
+          15i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          10i32,
+          11i32,
+          12i32,
+          13i32,
+          14i32,
+          15i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32,
+          256i32
+      ];
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 #[repr(i32)]
-pub enum Attribute {
-    TypeNone,
-    TypeBlack,
-    TypeAttrUrl,
-    TypeStyle,
-    TypeAttrIndirect,
+pub enum attribute {
+    TYPE_NONE,
+    TYPE_BLACK,
+    TYPE_ATTR_URL,
+    TYPE_STYLE,
+    TYPE_ATTR_INDIRECT,
 }
 
 #[derive(Copy)]
 #[repr(C)]
-pub struct Stringtype {
-    pub name: *const u8,
-    pub atype: Attribute,
+pub struct stringtype {
+    pub name : *const u8,
+    pub atype : attribute,
 }
 
-impl Clone for Stringtype {
+impl Clone for stringtype {
     fn clone(&self) -> Self { *self }
 }
 
-const X_ACTION: &str = "ACTION";
-const X_ATTRIBUTENAME: &str = "ATTRIBUTENAME";
-const X_BY: &str = "BY";
-const X_BACKGROUND: &str = "BACKGROUND";
-const X_DATAFORMATAS: &str = "DATAFORMATAS";
-const X_DATASRC: &str = "DATASRC";
-const X_DYNSRC: &str = "DYNSRC";
-const X_FILTER: &str = "FILTER";
-const X_FORMACTION: &str = "FORMACTION";
-const X_FOLDER: &str = "FOLDER";
-const X_FROM: &str = "FROM";
-const X_HANDLER: &str = "HANDLER";
-const X_HREF: &str = "HREF";
-const X_LOWSRC: &str = "LOWSRC";
-const X_POSTER: &str = "POSTER";
-const X_SRC: &str = "SRC";
-const X_STYLE: &str = "STYLE";
-const X_TO: &str = "TO";
-const X_VALUES: &str = "VALUES";
-const X_XLINKHREF: &str = "XLINK:HREF";
+static mut BLACKATTR : *mut stringtype = 0 as (*mut stringtype);
 
+static mut BLACKTAG : *mut *const u8 = 0 as (*mut *const u8);
 
-const BLACKATTR: [Stringtype; 21] = [
-    Stringtype { name: X_ACTION.as_ptr(), atype: Attribute::TypeAttrUrl }, /* form */
-    Stringtype { name: X_ATTRIBUTENAME.as_ptr(), atype: Attribute::TypeAttrIndirect }, /* SVG allow indirection of Attribute names */
-    Stringtype { name: X_BY.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
-    Stringtype { name: X_BACKGROUND.as_ptr(), atype: Attribute::TypeAttrUrl }, /* IE6, O11 */
-    Stringtype { name: X_DATAFORMATAS.as_ptr(), atype: Attribute::TypeBlack }, /* IE */
-    Stringtype { name: X_DATASRC.as_ptr(), atype: Attribute::TypeBlack }, /* IE */
-    Stringtype { name: X_DYNSRC.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Obsolete img Attribute */
-    Stringtype { name: X_FILTER.as_ptr(), atype: Attribute::TypeStyle }, /* Opera, SVG inline style */
-    Stringtype { name: X_FORMACTION.as_ptr(), atype: Attribute::TypeAttrUrl }, /* HTML 5 */
-    Stringtype { name: X_FOLDER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Only on A tags, IE-only */
-    Stringtype { name: X_FROM.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
-    Stringtype { name: X_HANDLER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG Tiny, Opera */
-    Stringtype { name: X_HREF.as_ptr(), atype: Attribute::TypeAttrUrl },
-    Stringtype { name: X_LOWSRC.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Obsolete img Attribute */
-    Stringtype { name: X_POSTER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Opera 10,11 */
-    Stringtype { name: X_SRC.as_ptr(), atype: Attribute::TypeAttrUrl },
-    Stringtype { name: X_STYLE.as_ptr(), atype: Attribute::TypeStyle },
-    Stringtype { name: X_TO.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
-    Stringtype { name: X_VALUES.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
-    Stringtype { name: X_XLINKHREF.as_ptr(), atype: Attribute::TypeAttrUrl },
-    Stringtype { name: ptr::null(), atype: Attribute::TypeNone },
-];
+#[derive(Clone, Copy)]
+#[repr(i32)]
+pub enum html5_type {
+    DATA_TEXT,
+    TAG_NAME_OPEN,
+    TAG_NAME_CLOSE,
+    TAG_NAME_SELFCLOSE,
+    TAG_DATA,
+    TAG_CLOSE,
+    ATTR_NAME,
+    ATTR_VALUE,
+    TAG_COMMENT,
+    DOCTYPE,
+}
 
-//static mut BLACKATTR: *mut Stringtype = 0 as ( *mut Stringtype);
+#[derive(Copy)]
+#[repr(C)]
+pub struct h5_state {
+    pub s : *const u8,
+    pub len : usize,
+    pub pos : usize,
+    pub is_close : i32,
+    pub state : unsafe extern fn(*mut h5_state) -> i32,
+    pub token_start : *const u8,
+    pub token_len : usize,
+    pub token_type : html5_type,
+}
 
-static mut BLACKTAG: *mut *const u8 = 0 as (*mut *const u8);
+impl Clone for h5_state {
+    fn clone(&self) -> Self { *self }
+}
 
+#[derive(Clone, Copy)]
+#[repr(i32)]
+pub enum html5_flags {
+    DATA_STATE,
+    VALUE_NO_QUOTE,
+    VALUE_SINGLE_QUOTE,
+    VALUE_DOUBLE_QUOTE,
+    VALUE_BACK_QUOTE,
+}
 
-//#[derive(Copy)]
-//#[repr(C)]
-//pub struct H5State {
-//    pub s: *const u8,
-//    pub len: usize,
-//    pub pos: usize,
-//    pub is_close: i32,
-//    pub state: unsafe extern fn(*mut H5State) -> i32,
-//    pub token_start: *const u8,
-//    pub token_len: usize,
-//    pub token_type: Html5Type,
-//}
-
-//impl Clone for H5State {
-//    fn clone(&self) -> Self { *self }
-//}
-//
-//#[derive(Clone, Copy)]
-//#[repr(i32)]
-//pub enum Html5Flags {
-//    DataState,
-//    ValueNoQuote,
-//    ValueSingleQuote,
-//    ValueDoubleQuote,
-//    ValueBackQuote,
-//}
-
-unsafe extern fn cstrcasecmp_with_null(mut a: *const u8, mut b: *const u8, mut n: usize,
+unsafe extern fn cstrcasecmp_with_null(
+    mut a : *const u8, mut b : *const u8, mut n : usize
 ) -> i32 {
-    let mut _current_block;
-    let mut ca: u8;
-    let mut cb: u8;
+    let mut _currentBlock;
+    let mut ca : u8;
+    let mut cb : u8;
     'loop1: loop {
         if !({
-            let _old = n;
-            n = n.wrapping_sub(1usize);
-            _old
-        } > 0usize) {
-            _current_block = 2;
+                 let _old = n;
+                 n = n.wrapping_sub(1usize);
+                 _old
+             } > 0usize) {
+            _currentBlock = 2;
             break;
         }
         cb = *{
-            let _old = b;
-            b = b.offset(1isize);
-            _old
-        };
+                  let _old = b;
+                  b = b.offset(1isize);
+                  _old
+              };
         if cb as (i32) == b'\0' as (i32) {
             continue;
         }
         ca = *{
-            let _old = a;
-            a = a.offset(1isize);
-            _old
-        };
+                  let _old = a;
+                  a = a.offset(1isize);
+                  _old
+              };
         if cb as (i32) >= b'a' as (i32) && (cb as (i32) <= b'z' as (i32)) {
             cb = (cb as (i32) - 0x20i32) as (u8);
         }
         if ca as (i32) != cb as (i32) {
-            _current_block = 9;
+            _currentBlock = 9;
             break;
         }
     }
-    if _current_block == 2 {
+    if _currentBlock == 2 {
         (if *a as (i32) == 0i32 { 0i32 } else { 1i32 })
     } else {
         1i32
     }
 }
 
-unsafe extern fn html_decode_char_at(src: *const u8, len: usize, consumed: *mut usize) -> i32 {
-    let mut _current_block;
-    let mut val: i32 = 0i32;
-    let mut i: usize;
-    let mut ch: i32;
-    if len == 0usize || src == 0i32 as ( *mut ::std::os::raw::c_void) as ( *const u8) {
+unsafe extern fn html_decode_char_at(
+    mut src : *const u8, mut len : usize, mut consumed : *mut usize
+) -> i32 {
+    let mut _currentBlock;
+    let mut val : i32 = 0i32;
+    let mut i : usize;
+    let mut ch : i32;
+    if len == 0usize || src == 0i32 as (*mut ::std::os::raw::c_void) as (*const u8) {
         *consumed = 0usize;
         -1i32
     } else {
         *consumed = 1usize;
         (if *src as (i32) != b'&' as (i32) || len < 2usize {
-            *src as (i32)
-        } else if *src.offset(1isize) as (i32) != b'#' as (i32) {
-            b'&' as (i32)
-        } else if *src.offset(
-            2isize
-        ) as (i32) == b'x' as (i32) || *src.offset(
-            2isize
-        ) as (i32) == b'X' as (i32) {
-            ch = *src.offset(3isize) as (i32);
-            ch = GS_HEX_DECODE_MAP[ch as (usize)];
-            (if ch == 256i32 {
-                b'&' as (i32)
-            } else {
-                val = ch;
-                i = 4usize;
-                'loop18: loop {
-                    if !(i < len) {
-                        _current_block = 19;
-                        break;
-                    }
-                    ch = *src.offset(i as (isize)) as (i32);
-                    if ch == b';' as (i32) {
-                        _current_block = 26;
-                        break;
-                    }
-                    ch = GS_HEX_DECODE_MAP[ch as (usize)];
-                    if ch == 256i32 {
-                        _current_block = 25;
-                        break;
-                    }
-                    val = val * 16i32 + ch;
-                    if val > 0x1000ffi32 {
-                        _current_block = 24;
-                        break;
-                    }
-                    i = i.wrapping_add(1usize);
-                }
-                (if _current_block == 19 {
-                    *consumed = i;
-                    val
-                } else if _current_block == 24 {
-                    b'&' as (i32)
-                } else if _current_block == 25 {
-                    *consumed = i;
-                    val
-                } else {
-                    *consumed = i.wrapping_add(1usize);
-                    val
-                })
-            })
-        } else {
-            i = 2usize;
-            ch = *src.offset(i as (isize)) as (i32);
-            (if ch < b'0' as (i32) || ch > b'9' as (i32) {
-                b'&' as (i32)
-            } else {
-                val = ch - b'0' as (i32);
-                i = i.wrapping_add(1usize);
-                'loop6: loop {
-                    if !(i < len) {
-                        _current_block = 7;
-                        break;
-                    }
-                    ch = *src.offset(i as (isize)) as (i32);
-                    if ch == b';' as (i32) {
-                        _current_block = 14;
-                        break;
-                    }
-                    if ch < b'0' as (i32) || ch > b'9' as (i32) {
-                        _current_block = 13;
-                        break;
-                    }
-                    val = val * 10i32 + (ch - b'0' as (i32));
-                    if val > 0x1000ffi32 {
-                        _current_block = 12;
-                        break;
-                    }
-                    i = i.wrapping_add(1usize);
-                }
-                (if _current_block == 7 {
-                    *consumed = i;
-                    val
-                } else if _current_block == 12 {
-                    b'&' as (i32)
-                } else if _current_block == 13 {
-                    *consumed = i;
-                    val
-                } else {
-                    *consumed = i.wrapping_add(1usize);
-                    val
-                })
-            })
-        })
+             *src as (i32)
+         } else if *src.offset(1isize) as (i32) != b'#' as (i32) {
+             b'&' as (i32)
+         } else if *src.offset(
+                        2isize
+                    ) as (i32) == b'x' as (i32) || *src.offset(
+                                                        2isize
+                                                    ) as (i32) == b'X' as (i32) {
+             ch = *src.offset(3isize) as (i32);
+             ch = gsHexDecodeMap[ch as (usize)];
+             (if ch == 256i32 {
+                  b'&' as (i32)
+              } else {
+                  val = ch;
+                  i = 4usize;
+                  'loop18: loop {
+                      if !(i < len) {
+                          _currentBlock = 19;
+                          break;
+                      }
+                      ch = *src.offset(i as (isize)) as (i32);
+                      if ch == b';' as (i32) {
+                          _currentBlock = 26;
+                          break;
+                      }
+                      ch = gsHexDecodeMap[ch as (usize)];
+                      if ch == 256i32 {
+                          _currentBlock = 25;
+                          break;
+                      }
+                      val = val * 16i32 + ch;
+                      if val > 0x1000ffi32 {
+                          _currentBlock = 24;
+                          break;
+                      }
+                      i = i.wrapping_add(1usize);
+                  }
+                  (if _currentBlock == 19 {
+                       *consumed = i;
+                       val
+                   } else if _currentBlock == 24 {
+                       b'&' as (i32)
+                   } else if _currentBlock == 25 {
+                       *consumed = i;
+                       val
+                   } else {
+                       *consumed = i.wrapping_add(1usize);
+                       val
+                   })
+              })
+         } else {
+             i = 2usize;
+             ch = *src.offset(i as (isize)) as (i32);
+             (if ch < b'0' as (i32) || ch > b'9' as (i32) {
+                  b'&' as (i32)
+              } else {
+                  val = ch - b'0' as (i32);
+                  i = i.wrapping_add(1usize);
+                  'loop6: loop {
+                      if !(i < len) {
+                          _currentBlock = 7;
+                          break;
+                      }
+                      ch = *src.offset(i as (isize)) as (i32);
+                      if ch == b';' as (i32) {
+                          _currentBlock = 14;
+                          break;
+                      }
+                      if ch < b'0' as (i32) || ch > b'9' as (i32) {
+                          _currentBlock = 13;
+                          break;
+                      }
+                      val = val * 10i32 + (ch - b'0' as (i32));
+                      if val > 0x1000ffi32 {
+                          _currentBlock = 12;
+                          break;
+                      }
+                      i = i.wrapping_add(1usize);
+                  }
+                  (if _currentBlock == 7 {
+                       *consumed = i;
+                       val
+                   } else if _currentBlock == 12 {
+                       b'&' as (i32)
+                   } else if _currentBlock == 13 {
+                       *consumed = i;
+                       val
+                   } else {
+                       *consumed = i.wrapping_add(1usize);
+                       val
+                   })
+              })
+         })
     }
 }
 
-unsafe extern fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n: usize) -> i32 {
-    let mut _current_block;
-    let mut consumed: usize = 0;
-    let mut cb: i32;
-    let mut first: i32 = 1i32;
+unsafe extern fn htmlencode_startswith(
+    mut a : *const u8, mut b : *const u8, mut n : usize
+) -> i32 {
+    let mut _currentBlock;
+    let mut consumed : usize;
+    let mut cb : i32;
+    let mut first : i32 = 1i32;
     'loop1: loop {
         if !(n > 0usize) {
-            _current_block = 2;
+            _currentBlock = 2;
             break;
         }
         if *a as (i32) == 0i32 {
-            _current_block = 12;
+            _currentBlock = 12;
             break;
         }
-        cb = html_decode_char_at(b, n, &mut consumed as ( *mut usize));
+        cb = html_decode_char_at(b,n,&mut consumed as (*mut usize));
         b = b.offset(consumed as (isize));
         n = n.wrapping_sub(consumed);
         if first != 0 && (cb <= 32i32) {
@@ -313,27 +520,29 @@ unsafe extern fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n
             cb = cb - 0x20i32;
         }
         if *a as (i32) != cb as (u8) as (i32) {
-            _current_block = 11;
+            _currentBlock = 11;
             break;
         }
         a = a.offset(1isize);
     }
-    if _current_block == 2 {
+    if _currentBlock == 2 {
         (if *a as (i32) == 0i32 { 1i32 } else { 0i32 })
-    } else if _current_block == 11 {
+    } else if _currentBlock == 11 {
         0i32
     } else {
         1i32
     }
 }
 
-
-const VIEWSOURCE_URL: &[u8] = b"VIEW-SOURCE\0";
-const DATA_URL: &[u8] = b"DATA\0";
-const VBSCRIPT_URL: &[u8] = b"VBSCRIPT\0";
-const JAVASCRIPT_URL: &[u8] = b"JAVA\0";
-
-unsafe extern fn is_black_url(mut s: *const u8, mut len: usize) -> i32 {
+unsafe extern fn is_black_url(
+    mut s : *const u8, mut len : usize
+) -> i32 {
+    static mut data_url : *const u8 = (*b"DATA\0").as_ptr();
+    static mut viewsource_url
+        : *const u8
+        = (*b"VIEW-SOURCE\0").as_ptr();
+    static mut vbscript_url : *const u8 = (*b"VBSCRIPT\0").as_ptr();
+    static mut javascript_url : *const u8 = (*b"JAVA\0").as_ptr();
     'loop1: loop {
         if !(len > 0usize && (*s as (i32) <= 32i32 || *s as (i32) >= 127i32)) {
             break;
@@ -341,211 +550,266 @@ unsafe extern fn is_black_url(mut s: *const u8, mut len: usize) -> i32 {
         s = s.offset(1isize);
         len = len.wrapping_sub(1usize);
     }
-    if htmlencode_startswith(DATA_URL.as_ptr(), s, len) != 0 {
+    if htmlencode_startswith(data_url,s,len) != 0 {
         1i32
-    } else if htmlencode_startswith(VIEWSOURCE_URL.as_ptr(), s, len) != 0 {
+    } else if htmlencode_startswith(viewsource_url,s,len) != 0 {
         1i32
-    } else if htmlencode_startswith(JAVASCRIPT_URL.as_ptr(), s, len) != 0 {
+    } else if htmlencode_startswith(javascript_url,s,len) != 0 {
         1i32
-    } else if htmlencode_startswith(VBSCRIPT_URL.as_ptr(), s, len) != 0 {
+    } else if htmlencode_startswith(vbscript_url,s,len) != 0 {
         1i32
     } else {
         0i32
     }
 }
 
-unsafe extern fn is_black_attr(s: *const u8, len: usize) -> Attribute {
-    let black;
+unsafe extern fn is_black_attr(
+    mut s : *const u8, mut len : usize
+) -> attribute {
+    let mut _currentBlock;
+    let mut black : *mut stringtype;
     if len < 2usize {
-        return Attribute::TypeNone;
+        attribute::TYPE_NONE
     } else {
         if len >= 5usize {
-            if (*s.offset(0isize) as (i32) == b'o' as (i32) || *s.offset(0isize) as (i32) == b'O' as (i32)) && (*s.offset(1isize) as (i32) == b'n' as (i32) || *s.offset(1isize) as (i32) == b'N' as (i32)) {
-                return Attribute::TypeBlack;
-            } else if cstrcasecmp_with_null((*b"XMLNS\0").as_ptr(), s, 5usize) == 0i32 || cstrcasecmp_with_null((*b"XLINK\0").as_ptr(), s, 5usize) == 0i32 {
-                return Attribute::TypeBlack;
+            if (*s.offset(0isize) as (i32) == b'o' as (i32) || *s.offset(
+                                                                    0isize
+                                                                ) as (i32) == b'O' as (i32)) && (*s.offset(
+                                                                                                      1isize
+                                                                                                  ) as (i32) == b'n' as (i32) || *s.offset(
+                                                                                                                                      1isize
+                                                                                                                                  ) as (i32) == b'N' as (i32)) {
+                return attribute::TYPE_BLACK;
+            } else if cstrcasecmp_with_null(
+                          (*b"XMLNS\0").as_ptr(),
+                          s,
+                          5usize
+                      ) == 0i32 || cstrcasecmp_with_null(
+                                       (*b"XLINK\0").as_ptr(),
+                                       s,
+                                       5usize
+                                   ) == 0i32 {
+                return attribute::TYPE_BLACK;
             }
         }
         black = BLACKATTR;
-
-        for i in 0..20 {
-            if cstrcasecmp_with_null(black[i].name, s, len) == 0 {
-                return black[i].atype;
+        'loop5: loop {
+            if !((*black).name != 0i32 as (*mut ::std::os::raw::c_void) as (*const u8)) {
+                _currentBlock = 6;
+                break;
             }
+            if cstrcasecmp_with_null((*black).name,s,len) == 0i32 {
+                _currentBlock = 9;
+                break;
+            }
+            black = black.offset(1isize);
         }
+        (if _currentBlock == 6 {
+             attribute::TYPE_NONE
+         } else {
+             (*black).atype
+         })
     }
-    Attribute::TypeNone
 }
 
-unsafe extern fn is_black_tag(s: *const u8, len: usize) -> i32 {
-    let mut _current_block;
-    let mut black: *mut *const u8;
+unsafe extern fn is_black_tag(
+    mut s : *const u8, mut len : usize
+) -> i32 {
+    let mut _currentBlock;
+    let mut black : *mut *const u8;
     if len < 3usize {
         0i32
     } else {
         black = BLACKTAG;
         'loop2: loop {
-            if !(*black != 0i32 as ( *mut ::std::os::raw::c_void) as ( *const u8)) {
-                _current_block = 3;
+            if !(*black != 0i32 as (*mut ::std::os::raw::c_void) as (*const u8)) {
+                _currentBlock = 3;
                 break;
             }
-            if cstrcasecmp_with_null(*black, s, len) == 0i32 {
-                _current_block = 10;
+            if cstrcasecmp_with_null(*black,s,len) == 0i32 {
+                _currentBlock = 10;
                 break;
             }
             black = black.offset(1isize);
         }
-        (if _current_block == 3 {
-            (if (*s.offset(0isize) as (i32) == b's' as (i32) || *s.offset(
-                0isize
-            ) as (i32) == b'S' as (i32)) && (*s.offset(
-                1isize
-            ) as (i32) == b'v' as (i32) || *s.offset(
-                1isize
-            ) as (i32) == b'V' as (i32)) && (*s.offset(
-                2isize
-            ) as (i32) == b'g' as (i32) || *s.offset(
-                2isize
-            ) as (i32) == b'G' as (i32)) {
-                1i32
-            } else if (*s.offset(
-                0isize
-            ) as (i32) == b'x' as (i32) || *s.offset(
-                0isize
-            ) as (i32) == b'X' as (i32)) && (*s.offset(
-                1isize
-            ) as (i32) == b's' as (i32) || *s.offset(
-                1isize
-            ) as (i32) == b'S' as (i32)) && (*s.offset(
-                2isize
-            ) as (i32) == b'l' as (i32) || *s.offset(
-                2isize
-            ) as (i32) == b'L' as (i32)) {
-                1i32
-            } else {
-                0i32
-            })
-        } else {
-            1i32
-        })
+        (if _currentBlock == 3 {
+             (if (*s.offset(0isize) as (i32) == b's' as (i32) || *s.offset(
+                                                                      0isize
+                                                                  ) as (i32) == b'S' as (i32)) && (*s.offset(
+                                                                                                        1isize
+                                                                                                    ) as (i32) == b'v' as (i32) || *s.offset(
+                                                                                                                                        1isize
+                                                                                                                                    ) as (i32) == b'V' as (i32)) && (*s.offset(
+                                                                                                                                                                          2isize
+                                                                                                                                                                      ) as (i32) == b'g' as (i32) || *s.offset(
+                                                                                                                                                                                                          2isize
+                                                                                                                                                                                                      ) as (i32) == b'G' as (i32)) {
+                  1i32
+              } else if (*s.offset(
+                              0isize
+                          ) as (i32) == b'x' as (i32) || *s.offset(
+                                                              0isize
+                                                          ) as (i32) == b'X' as (i32)) && (*s.offset(
+                                                                                                1isize
+                                                                                            ) as (i32) == b's' as (i32) || *s.offset(
+                                                                                                                                1isize
+                                                                                                                            ) as (i32) == b'S' as (i32)) && (*s.offset(
+                                                                                                                                                                  2isize
+                                                                                                                                                              ) as (i32) == b'l' as (i32) || *s.offset(
+                                                                                                                                                                                                  2isize
+                                                                                                                                                                                              ) as (i32) == b'L' as (i32)) {
+                  1i32
+              } else {
+                  0i32
+              })
+         } else {
+             1i32
+         })
     }
 }
 
 #[no_mangle]
-pub unsafe extern fn libinjection_is_xss(s: *const u8, len: usize, flags: Html5Flags) -> i32 {
-    let current_block;
-    let mut h5: H5State = H5State {
-        s: 0 as *const u8,
-        len: 0,
-        pos: 0,
-        is_close: 0,
-        num_chars: 0,
-        state: h5_state_eof,
-        token_start: 0 as *const u8,
-        token_len: 0,
-        token_type: Html5Type::TagComment,
-    };
-    let mut attr: Attribute = Attribute::TypeNone;
-    libinjection_h5_init(&mut h5 as ( *mut H5State), s, len, flags);
+pub unsafe extern fn libinjection_is_xss(
+    mut s : *const u8, mut len : usize, mut flags : i32
+) -> i32 {
+    let mut _currentBlock;
+    let mut h5 : h5_state;
+    let mut attr : attribute = attribute::TYPE_NONE;
+    libinjection_h5_init(
+        &mut h5 as (*mut h5_state),
+        s,
+        len,
+        flags as (html5_flags)
+    );
     'loop1: loop {
-        if libinjection_h5_next(&mut h5 as ( *mut H5State)) == 0 {
-            current_block = 2;
+        if libinjection_h5_next(&mut h5 as (*mut h5_state)) == 0 {
+            _currentBlock = 2;
             break;
         }
-        if h5.token_type as (i32) != Html5Type::AttrValue as (i32) {
-            attr = Attribute::TypeNone;
+        if h5.token_type as (i32) != html5_type::ATTR_VALUE as (i32) {
+            attr = attribute::TYPE_NONE;
         }
-        if h5.token_type as (i32) == Html5Type::DOCTYPE as (i32) {
-            current_block = 37;
+        if h5.token_type as (i32) == html5_type::DOCTYPE as (i32) {
+            _currentBlock = 37;
             break;
         }
-        if h5.token_type as (i32) == Html5Type::TagNameOpen as (i32) {
-            if is_black_tag(h5.token_start, h5.token_len) != 0 {
-                current_block = 36;
+        if h5.token_type as (i32) == html5_type::TAG_NAME_OPEN as (i32) {
+            if is_black_tag(h5.token_start,h5.token_len) != 0 {
+                _currentBlock = 36;
                 break;
             }
-        } else if h5.token_type as (i32) == Html5Type::AttrName as (i32) {
-            attr = is_black_attr(h5.token_start, h5.token_len);
-        } else if h5.token_type as (i32) == Html5Type::AttrValue as (i32) {
-            if !(attr as (i32) == Attribute::TypeNone as (i32)) {
-                if attr as (i32) == Attribute::TypeAttrIndirect as (i32) {
-                    if is_black_attr(h5.token_start, h5.token_len) != Attribute::TypeNone {
-                        current_block = 32;
+        } else if h5.token_type as (i32) == html5_type::ATTR_NAME as (i32) {
+            attr = is_black_attr(h5.token_start,h5.token_len);
+        } else if h5.token_type as (i32) == html5_type::ATTR_VALUE as (i32) {
+            if !(attr as (i32) == attribute::TYPE_NONE as (i32)) {
+                if attr as (i32) == attribute::TYPE_ATTR_INDIRECT as (i32) {
+                    if is_black_attr(h5.token_start,h5.token_len) != 0 {
+                        _currentBlock = 32;
                         break;
                     }
                 } else {
-                    if attr as (i32) == Attribute::TypeStyle as (i32) {
-                        current_block = 30;
+                    if attr as (i32) == attribute::TYPE_STYLE as (i32) {
+                        _currentBlock = 30;
                         break;
                     }
-                    if attr as (i32) == Attribute::TypeAttrUrl as (i32) {
-                        if is_black_url(h5.token_start, h5.token_len) != 0 {
-                            current_block = 29;
+                    if attr as (i32) == attribute::TYPE_ATTR_URL as (i32) {
+                        if is_black_url(h5.token_start,h5.token_len) != 0 {
+                            _currentBlock = 29;
                             break;
                         }
-                    } else if attr as (i32) == Attribute::TypeBlack as (i32) {
-                        current_block = 27;
+                    } else if attr as (i32) == attribute::TYPE_BLACK as (i32) {
+                        _currentBlock = 27;
                         break;
                     }
                 }
             }
-            attr = Attribute::TypeNone;
+            attr = attribute::TYPE_NONE;
         } else {
-            if !(h5.token_type as (i32) == Html5Type::TagComment as (i32)) {
+            if !(h5.token_type as (i32) == html5_type::TAG_COMMENT as (i32)) {
                 continue;
             }
-            if memchr(h5.token_start as ( *const ::std::os::raw::c_void), b'`' as (i32), h5.token_len) != 0i32 as ( *mut ::std::os::raw::c_void) {
-                current_block = 21;
+            if memchr(
+                   h5.token_start as (*const ::std::os::raw::c_void),
+                   b'`' as (i32),
+                   h5.token_len
+               ) != 0i32 as (*mut ::std::os::raw::c_void) {
+                _currentBlock = 21;
                 break;
             }
             if h5.token_len > 3usize {
-                if *h5.token_start.offset(0isize) as (i32) == b'[' as (i32)
-                    && (*h5.token_start.offset(1isize) as (i32) == b'i' as (i32) || *h5.token_start.offset(1isize) as (i32) == b'I' as (i32))
-                    && (*h5.token_start.offset(2isize) as (i32) == b'f' as (i32) || *h5.token_start.offset(2isize) as (i32) == b'F' as (i32)) {
-                    current_block = 20;
+                if *h5.token_start.offset(
+                        0isize
+                    ) as (i32) == b'[' as (i32) && (*h5.token_start.offset(
+                                                         1isize
+                                                     ) as (i32) == b'i' as (i32) || *h5.token_start.offset(
+                                                                                         1isize
+                                                                                     ) as (i32) == b'I' as (i32)) && (*h5.token_start.offset(
+                                                                                                                           2isize
+                                                                                                                       ) as (i32) == b'f' as (i32) || *h5.token_start.offset(
+                                                                                                                                                           2isize
+                                                                                                                                                       ) as (i32) == b'F' as (i32)) {
+                    _currentBlock = 20;
                     break;
                 }
-                if (*h5.token_start.offset(0isize) as (i32) == b'x' as (i32) || *h5.token_start.offset(0isize) as (i32) == b'X' as (i32))
-                    && (*h5.token_start.offset(1isize) as (i32) == b'm' as (i32) || *h5.token_start.offset(1isize) as (i32) == b'M' as (i32))
-                    && (*h5.token_start.offset(2isize) as (i32) == b'l' as (i32) || *h5.token_start.offset(2isize) as (i32) == b'L' as (i32)) {
-                    current_block = 19;
+                if (*h5.token_start.offset(
+                         0isize
+                     ) as (i32) == b'x' as (i32) || *h5.token_start.offset(
+                                                         0isize
+                                                     ) as (i32) == b'X' as (i32)) && (*h5.token_start.offset(
+                                                                                           1isize
+                                                                                       ) as (i32) == b'm' as (i32) || *h5.token_start.offset(
+                                                                                                                           1isize
+                                                                                                                       ) as (i32) == b'M' as (i32)) && (*h5.token_start.offset(
+                                                                                                                                                             2isize
+                                                                                                                                                         ) as (i32) == b'l' as (i32) || *h5.token_start.offset(
+                                                                                                                                                                                             2isize
+                                                                                                                                                                                         ) as (i32) == b'L' as (i32)) {
+                    _currentBlock = 19;
                     break;
                 }
             }
             if !(h5.token_len > 5usize) {
                 continue;
             }
-            if cstrcasecmp_with_null((*b"IMPORT\0").as_ptr(), h5.token_start, 6usize) == 0i32 {
-                current_block = 18;
+            if cstrcasecmp_with_null(
+                   (*b"IMPORT\0").as_ptr(),
+                   h5.token_start,
+                   6usize
+               ) == 0i32 {
+                _currentBlock = 18;
                 break;
             }
-            if cstrcasecmp_with_null((*b"ENTITY\0").as_ptr(), h5.token_start, 6usize) == 0i32 {
-                current_block = 17;
+            if cstrcasecmp_with_null(
+                   (*b"ENTITY\0").as_ptr(),
+                   h5.token_start,
+                   6usize
+               ) == 0i32 {
+                _currentBlock = 17;
                 break;
             }
         }
     }
-    if current_block == 2 {
+    if _currentBlock == 2 {
         0i32
-    } else if current_block == 17 {
+    } else if _currentBlock == 17 {
         1i32
-    } else if current_block == 18 {
+    } else if _currentBlock == 18 {
         1i32
-    } else if current_block == 19 {
+    } else if _currentBlock == 19 {
         1i32
-    } else if current_block == 20 {
+    } else if _currentBlock == 20 {
         1i32
-    } else if current_block == 21 {
+    } else if _currentBlock == 21 {
         1i32
-    } else if current_block == 27 {
+    } else if _currentBlock == 27 {
         1i32
-    } else if current_block == 29 {
+    } else if _currentBlock == 29 {
         1i32
-    } else if current_block == 30 {
+    } else if _currentBlock == 30 {
         1i32
-    } else if current_block == 32 {
+    } else if _currentBlock == 32 {
         1i32
-    } else if current_block == 36 {
+    } else if _currentBlock == 36 {
         1i32
     } else {
         1i32
@@ -553,36 +817,38 @@ pub unsafe extern fn libinjection_is_xss(s: *const u8, len: usize, flags: Html5F
 }
 
 #[no_mangle]
-pub unsafe extern fn libinjection_xss(s: *const u8, len: usize) -> i32 {
+pub unsafe extern fn libinjection_xss(
+    mut s : *const u8, mut len : usize
+) -> i32 {
     if libinjection_is_xss(
-        s,
-        len,
-        Html5Flags::DataState,
-    ) != 0 {
+           s,
+           len,
+           html5_flags::DATA_STATE as (i32)
+       ) != 0 {
         1i32
     } else if libinjection_is_xss(
-        s,
-        len,
-        Html5Flags::ValueNoQuote,
-    ) != 0 {
+                  s,
+                  len,
+                  html5_flags::VALUE_NO_QUOTE as (i32)
+              ) != 0 {
         1i32
     } else if libinjection_is_xss(
-        s,
-        len,
-        Html5Flags::ValueSingleQuote,
-    ) != 0 {
+                  s,
+                  len,
+                  html5_flags::VALUE_SINGLE_QUOTE as (i32)
+              ) != 0 {
         1i32
     } else if libinjection_is_xss(
-        s,
-        len,
-        Html5Flags::ValueDoubleQuote,
-    ) != 0 {
+                  s,
+                  len,
+                  html5_flags::VALUE_DOUBLE_QUOTE as (i32)
+              ) != 0 {
         1i32
     } else if libinjection_is_xss(
-        s,
-        len,
-        Html5Flags::ValueBackQuote,
-    ) != 0 {
+                  s,
+                  len,
+                  html5_flags::VALUE_BACK_QUOTE as (i32)
+              ) != 0 {
         1i32
     } else {
         0i32
