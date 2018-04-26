@@ -2,13 +2,14 @@ use libinjection_html5::Html5Type;
 use libinjection_html5::{H5State, Html5Flags};
 use libinjection_html5::{h5_state_eof, libinjection_h5_init, libinjection_h5_next};
 
+use std::ptr;
+
 extern {
     //todo: get rid of
     fn memchr(__s: *const ::std::os::raw::c_void, __c: i32, __n: usize) -> *mut ::std::os::raw::c_void;
 }
 
-static mut GS_HEX_DECODE_MAP
-: [i32; 256] = [
+static mut GS_HEX_DECODE_MAP: [i32; 256] = [
     256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
     256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
     256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
@@ -45,16 +46,62 @@ pub enum Attribute {
 
 #[derive(Copy)]
 #[repr(C)]
-pub struct stringtype {
+pub struct Stringtype {
     pub name: *const u8,
     pub atype: Attribute,
 }
 
-impl Clone for stringtype {
+impl Clone for Stringtype {
     fn clone(&self) -> Self { *self }
 }
 
-static mut BLACKATTR: *mut stringtype = 0 as (*mut stringtype);
+const X_ACTION: &str = "ACTION";
+const X_ATTRIBUTENAME: &str = "ATTRIBUTENAME";
+const X_BY: &str = "BY";
+const X_BACKGROUND: &str = "BACKGROUND";
+const X_DATAFORMATAS: &str = "DATAFORMATAS";
+const X_DATASRC: &str = "DATASRC";
+const X_DYNSRC: &str = "DYNSRC";
+const X_FILTER: &str = "FILTER";
+const X_FORMACTION: &str = "FORMACTION";
+const X_FOLDER: &str = "FOLDER";
+const X_FROM: &str = "FROM";
+const X_HANDLER: &str = "HANDLER";
+const X_HREF: &str = "HREF";
+const X_LOWSRC: &str = "LOWSRC";
+const X_POSTER: &str = "POSTER";
+const X_SRC: &str = "SRC";
+const X_STYLE: &str = "STYLE";
+const X_TO: &str = "TO";
+const X_VALUES: &str = "VALUES";
+const X_XLINKHREF: &str = "XLINK:HREF";
+
+
+const BLACKATTR: [Stringtype; 21] = [
+    Stringtype { name: X_ACTION.as_ptr(), atype: Attribute::TypeAttrUrl }, /* form */
+    Stringtype { name: X_ATTRIBUTENAME.as_ptr(), atype: Attribute::TypeAttrIndirect }, /* SVG allow indirection of Attribute names */
+    Stringtype { name: X_BY.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
+    Stringtype { name: X_BACKGROUND.as_ptr(), atype: Attribute::TypeAttrUrl }, /* IE6, O11 */
+    Stringtype { name: X_DATAFORMATAS.as_ptr(), atype: Attribute::TypeBlack }, /* IE */
+    Stringtype { name: X_DATASRC.as_ptr(), atype: Attribute::TypeBlack }, /* IE */
+    Stringtype { name: X_DYNSRC.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Obsolete img Attribute */
+    Stringtype { name: X_FILTER.as_ptr(), atype: Attribute::TypeStyle }, /* Opera, SVG inline style */
+    Stringtype { name: X_FORMACTION.as_ptr(), atype: Attribute::TypeAttrUrl }, /* HTML 5 */
+    Stringtype { name: X_FOLDER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Only on A tags, IE-only */
+    Stringtype { name: X_FROM.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
+    Stringtype { name: X_HANDLER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG Tiny, Opera */
+    Stringtype { name: X_HREF.as_ptr(), atype: Attribute::TypeAttrUrl },
+    Stringtype { name: X_LOWSRC.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Obsolete img Attribute */
+    Stringtype { name: X_POSTER.as_ptr(), atype: Attribute::TypeAttrUrl }, /* Opera 10,11 */
+    Stringtype { name: X_SRC.as_ptr(), atype: Attribute::TypeAttrUrl },
+    Stringtype { name: X_STYLE.as_ptr(), atype: Attribute::TypeStyle },
+    Stringtype { name: X_TO.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
+    Stringtype { name: X_VALUES.as_ptr(), atype: Attribute::TypeAttrUrl }, /* SVG */
+    Stringtype { name: X_XLINKHREF.as_ptr(), atype: Attribute::TypeAttrUrl },
+    Stringtype { name: ptr::null(), atype: Attribute::TypeNone },
+];
+
+//static mut BLACKATTR: *mut Stringtype = 0 as ( *mut Stringtype);
 
 static mut BLACKTAG: *mut *const u8 = 0 as (*mut *const u8);
 
@@ -86,8 +133,7 @@ static mut BLACKTAG: *mut *const u8 = 0 as (*mut *const u8);
 //    ValueBackQuote,
 //}
 
-unsafe extern fn cstrcasecmp_with_null(
-    mut a: *const u8, mut b: *const u8, mut n: usize,
+unsafe extern fn cstrcasecmp_with_null(mut a: *const u8, mut b: *const u8, mut n: usize,
 ) -> i32 {
     let mut _current_block;
     let mut ca: u8;
@@ -134,7 +180,7 @@ unsafe extern fn html_decode_char_at(src: *const u8, len: usize, consumed: *mut 
     let mut val: i32 = 0i32;
     let mut i: usize;
     let mut ch: i32;
-    if len == 0usize || src == 0i32 as (*mut ::std::os::raw::c_void) as (*const u8) {
+    if len == 0usize || src == 0i32 as ( *mut ::std::os::raw::c_void) as ( *const u8) {
         *consumed = 0usize;
         -1i32
     } else {
@@ -250,7 +296,7 @@ unsafe extern fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n
             _current_block = 12;
             break;
         }
-        cb = html_decode_char_at(b, n, &mut consumed as (*mut usize));
+        cb = html_decode_char_at(b, n, &mut consumed as ( *mut usize));
         b = b.offset(consumed as (isize));
         n = n.wrapping_sub(consumed);
         if first != 0 && (cb <= 32i32) {
@@ -309,50 +355,26 @@ unsafe extern fn is_black_url(mut s: *const u8, mut len: usize) -> i32 {
 }
 
 unsafe extern fn is_black_attr(s: *const u8, len: usize) -> Attribute {
-    let mut _current_block;
-    let mut black: *mut stringtype;
+    let black;
     if len < 2usize {
-        Attribute::TypeNone
+        return Attribute::TypeNone;
     } else {
         if len >= 5usize {
-            if (*s.offset(0isize) as (i32) == b'o' as (i32) || *s.offset(
-                0isize
-            ) as (i32) == b'O' as (i32)) && (*s.offset(
-                1isize
-            ) as (i32) == b'n' as (i32) || *s.offset(
-                1isize
-            ) as (i32) == b'N' as (i32)) {
+            if (*s.offset(0isize) as (i32) == b'o' as (i32) || *s.offset(0isize) as (i32) == b'O' as (i32)) && (*s.offset(1isize) as (i32) == b'n' as (i32) || *s.offset(1isize) as (i32) == b'N' as (i32)) {
                 return Attribute::TypeBlack;
-            } else if cstrcasecmp_with_null(
-                (*b"XMLNS\0").as_ptr(),
-                s,
-                5usize,
-            ) == 0i32 || cstrcasecmp_with_null(
-                (*b"XLINK\0").as_ptr(),
-                s,
-                5usize,
-            ) == 0i32 {
+            } else if cstrcasecmp_with_null((*b"XMLNS\0").as_ptr(), s, 5usize) == 0i32 || cstrcasecmp_with_null((*b"XLINK\0").as_ptr(), s, 5usize) == 0i32 {
                 return Attribute::TypeBlack;
             }
         }
         black = BLACKATTR;
-        'loop5: loop {
-            if !((*black).name != 0i32 as (*mut ::std::os::raw::c_void) as (*const u8)) {
-                _current_block = 6;
-                break;
+
+        for i in 0..20 {
+            if cstrcasecmp_with_null(black[i].name, s, len) == 0 {
+                return black[i].atype;
             }
-            if cstrcasecmp_with_null((*black).name, s, len) == 0i32 {
-                _current_block = 9;
-                break;
-            }
-            black = black.offset(1isize);
         }
-        (if _current_block == 6 {
-            Attribute::TypeNone
-        } else {
-            (*black).atype
-        })
     }
+    Attribute::TypeNone
 }
 
 unsafe extern fn is_black_tag(s: *const u8, len: usize) -> i32 {
@@ -363,7 +385,7 @@ unsafe extern fn is_black_tag(s: *const u8, len: usize) -> i32 {
     } else {
         black = BLACKTAG;
         'loop2: loop {
-            if !(*black != 0i32 as (*mut ::std::os::raw::c_void) as (*const u8)) {
+            if !(*black != 0i32 as ( *mut ::std::os::raw::c_void) as ( *const u8)) {
                 _current_block = 3;
                 break;
             }
@@ -424,9 +446,9 @@ pub unsafe extern fn libinjection_is_xss(s: *const u8, len: usize, flags: Html5F
         token_type: Html5Type::TagComment,
     };
     let mut attr: Attribute = Attribute::TypeNone;
-    libinjection_h5_init(&mut h5 as (*mut H5State), s, len, flags);
+    libinjection_h5_init(&mut h5 as ( *mut H5State), s, len, flags);
     'loop1: loop {
-        if libinjection_h5_next(&mut h5 as (*mut H5State)) == 0 {
+        if libinjection_h5_next(&mut h5 as ( *mut H5State)) == 0 {
             current_block = 2;
             break;
         }
@@ -472,7 +494,7 @@ pub unsafe extern fn libinjection_is_xss(s: *const u8, len: usize, flags: Html5F
             if !(h5.token_type as (i32) == Html5Type::TagComment as (i32)) {
                 continue;
             }
-            if memchr(h5.token_start as (*const ::std::os::raw::c_void), b'`' as (i32), h5.token_len) != 0i32 as (*mut ::std::os::raw::c_void) {
+            if memchr(h5.token_start as ( *const ::std::os::raw::c_void), b'`' as (i32), h5.token_len) != 0i32 as ( *mut ::std::os::raw::c_void) {
                 current_block = 21;
                 break;
             }
@@ -531,7 +553,7 @@ pub unsafe extern fn libinjection_is_xss(s: *const u8, len: usize, flags: Html5F
 }
 
 #[no_mangle]
-pub unsafe extern fn libinjection_xss(     s: *const u8,  len: usize,) -> i32 {
+pub unsafe extern fn libinjection_xss(s: *const u8, len: usize) -> i32 {
     if libinjection_is_xss(
         s,
         len,

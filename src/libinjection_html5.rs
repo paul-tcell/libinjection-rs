@@ -143,16 +143,8 @@ unsafe extern fn h5_state_data(hs: *mut H5State) -> i32 {
     } else {
         (*hs).token_start = (*hs).s.offset((*hs).pos as (isize));
         (*hs).token_type = Html5Type::DataText;
-        (*hs).token_len = (((idx as (isize)).wrapping_sub(
-            (*hs).s as (isize)
-        ) / size_of::<u8>() as (isize)) as (usize)).wrapping_sub(
-            (*hs).pos
-        );
-        (*hs).pos = (((idx as (isize)).wrapping_sub(
-            (*hs).s as (isize)
-        ) / size_of::<u8>() as (isize)) as (usize)).wrapping_add(
-            1usize
-        );
+        (*hs).token_len = (((idx as (isize)).wrapping_sub((*hs).s as (isize)) / size_of::<u8>() as (isize)) as (usize)).wrapping_sub((*hs).pos);
+        (*hs).pos = (((idx as (isize)).wrapping_sub((*hs).s as (isize)) / size_of::<u8>() as (isize)) as (usize)).wrapping_add(1usize);
         (*hs).state = h5_state_tag_open as (unsafe extern fn(*mut H5State) -> i32);
         if (*hs).token_len == 0usize {
             return h5_state_tag_open(hs);
