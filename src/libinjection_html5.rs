@@ -13,14 +13,10 @@ const CHAR_NULL: i32 = 0;
 const CHAR_BANG: i32 = 33;
 const CHAR_DOUBLE: i32 = 34;
 const CHAR_PERCENT: i32 = 37;
-#[allow(dead_code)]
 const CHAR_SINGLE: i32 = 39;
 const CHAR_DASH: i32 = 45;
-#[allow(dead_code)]
 const CHAR_SLASH: i32 = 47;
-#[allow(dead_code)]
 const CHAR_LT: i32 = 60;
-#[allow(dead_code)]
 const CHAR_EQUALS: i32 = 61;
 const CHAR_GT: i32 = 62;
 #[allow(dead_code)]
@@ -30,13 +26,6 @@ const CHAR_RIGHTB: i32 = 93;
 #[allow(dead_code)]
 const CHAR_TICK: i32 = 96;
 
-
-extern {
-    fn __assert_fail(__assertion: *const u8, __file: *const u8, __line: u32, __function: *const u8);
-    //fn memchr( __s : *const c_void, __c : i32, __n : usize ) -> *mut c_void;
-    //fn memset( __s : *mut c_void, __c : i32, __n : usize   ) -> *mut c_void;
-    //fn strchr(__s : *const u8, __c : i32) -> *mut u8;
-}
 
 #[derive(Clone, Copy)]
 #[repr(i32)]
@@ -81,7 +70,7 @@ pub enum html5_flags {
 }
 
 #[no_mangle]
-pub extern fn libinjection_h5_init(mut hs: *mut h5_state, mut s: *const u8, mut len: usize, mut flags: html5_flags) {
+pub fn libinjection_h5_init(mut hs: *mut h5_state, mut s: *const u8, mut len: usize, mut flags: html5_flags) {
     unsafe { memset(hs as (*mut c_void), 0i32, size_of::<h5_state>()) };
     let hs = unsafe { hs.as_mut() }.expect("invalid pointer for h5_state.");
     hs.s = s;
@@ -104,12 +93,12 @@ pub fn libinjection_h5_next(hs: &mut h5_state) -> i32 {
     if hs.state as (*mut c_void) != 0i32 as (*mut c_void) {
         0i32;
     } else {
-        unsafe { __assert_fail((*b"hs->state != NULL\0").as_ptr(), file!().as_ptr(), line!(), (*b"libinjection_h5_next\0").as_ptr()) };
+        panic!("{} in {}:{} function: {}", "hs->state != NULL", file!(), line!(), "libinjection_h5_next");
     }
     (hs.state)(hs)
 }
 
-fn h5_state_eof(hs: &mut h5_state) -> i32 {
+pub fn h5_state_eof(hs: &mut h5_state) -> i32 {
     0i32
 }
 
@@ -118,9 +107,9 @@ fn h5_state_data(hs: &mut h5_state) -> i32 {
     if hs.len >= hs.pos {
         0i32;
     } else {
-        unsafe { __assert_fail((*b"hs->len >= hs->pos\0").as_ptr(), file!().as_ptr(), line!(), (*b"h5_state_data\0").as_ptr()) };
+        panic!("{} in {}:{} function: {}", "hs->len >= hs->pos", file!(), line!(), "h5_state_data");
     }
-    idx = unsafe { memchr(hs.s.offset(hs.pos as (isize)) as (*const c_void), 60i32, hs.len.wrapping_sub(hs.pos)) as (*const u8) };
+    idx = unsafe { memchr(hs.s.offset(hs.pos as (isize)) as (*const c_void), CHAR_LT, hs.len.wrapping_sub(hs.pos)) as (*const u8) };
     if idx == 0i32 as (*mut c_void) as (*const u8) {
         hs.token_start = unsafe { hs.s.offset(hs.pos as (isize)) };
         hs.token_len = hs.len.wrapping_sub(hs.pos);
@@ -151,7 +140,7 @@ fn h5_state_tag_open(hs: &mut h5_state) -> i32 {
         (if ch as (i32) == 33i32 {
             hs.pos = hs.pos.wrapping_add(1usize);
             h5_state_markup_declaration_open(hs)
-        } else if ch as (i32) == 47i32 {
+        } else if ch as (i32) == CHAR_SLASH {
             hs.pos = hs.pos.wrapping_add(1usize);
             hs.is_close = 1i32;
             h5_state_end_tag_open(hs)
@@ -161,7 +150,8 @@ fn h5_state_tag_open(hs: &mut h5_state) -> i32 {
         } else if ch as (i32) == CHAR_PERCENT {
             hs.pos = hs.pos.wrapping_add(1usize);
             h5_state_bogus_comment2(hs)
-        } else if ch as (i32) >= b'a' as (i32) && (ch as (i32) <= b'z' as (i32)) || ch as (i32) >= b'A' as (i32) && (ch as (i32) <= b'Z' as (i32)) {
+        } else if ch as (i32) >= b'a' as (i32) && (ch as (i32) <= b'z' as (i32)) ||
+            ch as (i32) >= b'A' as (i32) && (ch as (i32) <= b'Z' as (i32)) {
             h5_state_tag_name(hs)
         } else if ch as (i32) == 0i32 {
             h5_state_tag_name(hs)
@@ -233,7 +223,7 @@ fn h5_state_tag_name(hs: &mut h5_state) -> i32 {
                 _currentBlock = 13;
                 break;
             }
-            if ch as (i32) == 47i32 {
+            if ch as (i32) == CHAR_SLASH {
                 _currentBlock = 12;
                 break;
             }
@@ -310,7 +300,7 @@ fn h5_state_before_attribute_name(hs: &mut h5_state) -> i32 {
         hs.token_type = html5_type::TAG_NAME_CLOSE;
         hs.pos = hs.pos.wrapping_add(1usize);
         1i32
-    } else if ch == 47i32 {
+    } else if ch == CHAR_SLASH {
         hs.pos = hs.pos.wrapping_add(1usize);
         h5_state_self_closing_start_tag(hs)
     } else if ch == -1i32 {
@@ -335,11 +325,11 @@ fn h5_state_attribute_name(hs: &mut h5_state) -> i32 {
             _currentBlock = 11;
             break;
         }
-        if ch as (i32) == 47i32 {
+        if ch as (i32) == CHAR_SLASH {
             _currentBlock = 10;
             break;
         }
-        if ch as (i32) == 61i32 {
+        if ch as (i32) == CHAR_EQUALS {
             _currentBlock = 9;
             break;
         }
@@ -392,10 +382,10 @@ fn h5_state_after_attribute_name(hs: &mut h5_state) -> i32 {
     c = h5_skip_white(hs);
     if c == 62i32 {
         h5_state_tag_name_close(hs)
-    } else if c == 61i32 {
+    } else if c == CHAR_EQUALS {
         hs.pos = hs.pos.wrapping_add(1usize);
         h5_state_before_attribute_value(hs)
-    } else if c == 47i32 {
+    } else if c == CHAR_SLASH {
         hs.pos = hs.pos.wrapping_add(1usize);
         h5_state_self_closing_start_tag(hs)
     } else if c == -1i32 {
@@ -413,7 +403,7 @@ fn h5_state_before_attribute_value(hs: &mut h5_state) -> i32 {
         0i32
     } else if c == CHAR_DOUBLE {
         h5_state_attribute_value_double_quote(hs)
-    } else if c == 39i32 {
+    } else if c == CHAR_SINGLE {
         h5_state_attribute_value_single_quote(hs)
     } else if c == 96i32 {
         h5_state_attribute_value_back_quote(hs)
@@ -508,7 +498,7 @@ fn h5_state_after_attribute_value_quoted_state(hs: &mut h5_state) -> i32 {
         (if h5_is_white(ch) != 0 {
             hs.pos = hs.pos.wrapping_add(1usize);
             h5_state_before_attribute_name(hs)
-        } else if ch as (i32) == 47i32 {
+        } else if ch as (i32) == CHAR_SLASH {
             hs.pos = hs.pos.wrapping_add(1usize);
             h5_state_self_closing_start_tag(hs)
         } else if ch as (i32) == 62i32 {
@@ -534,7 +524,7 @@ fn h5_state_self_closing_start_tag(hs: &mut h5_state) -> i32 {
             if hs.pos > 0usize {
                 0i32;
             } else {
-                unsafe { __assert_fail((*b"hs->pos > 0\0").as_ptr(), file!().as_ptr(), line!(), (*b"h5_state_self_closing_start_tag\0").as_ptr()) };
+                panic!("{} in {}:{} function: {}", "hs->pos > 0", file!(), line!(), "h5_state_self_closing_start_tag");
             }
             hs.token_start = unsafe { hs.s.offset(hs.pos as (isize)).offset(-1isize) };
             hs.token_len = 2usize;
@@ -743,7 +733,7 @@ unsafe fn h5_state_comment_orig(mut hs: *mut h5_state) -> i32 {
     'loop1: loop {
         idx = memchr(
             (*hs).s.offset(pos as (isize)) as (*const c_void),
-            45i32,
+            CHAR_DASH,
             (*hs).len.wrapping_sub(pos),
         ) as (*const u8);
         if idx == 0i32 as (*mut c_void) as (*const u8) || idx > (*hs).s.offset(
@@ -756,19 +746,16 @@ unsafe fn h5_state_comment_orig(mut hs: *mut h5_state) -> i32 {
         }
         offset = 1usize;
         'loop3: loop {
-            if !(idx.offset(offset as (isize)) < end && (*idx.offset(
-                offset as (isize)
-            ) as (i32) == 0i32)) {
+            if !(idx.offset(offset as (isize)) < end && (*idx.offset(offset as (isize)) as (i32) == 0i32)) {
                 break;
             }
-            offset = offset.wrapping_add(1usize);
         }
         if idx.offset(offset as (isize)) == end {
             _currentBlock = 12;
             break;
         }
         ch = *idx.offset(offset as (isize));
-        if ch as (i32) != 45i32 && (ch as (i32) != 33i32) {
+        if ch as (i32) != CHAR_DASH && (ch as (i32) != 33i32) {
             pos = (((idx as (isize)).wrapping_sub(
                 (*hs).s as (isize)
             ) / size_of::<u8>() as (isize)) as (usize)).wrapping_add(
