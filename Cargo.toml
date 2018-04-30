@@ -4,6 +4,8 @@ version = "0.1.0"
 authors = ["Paul Callahan <paul@tcell.io>"]
 
 [dependencies]
+memchr = "2.0.1"
+libc = "*"
 
 
 [lib]
