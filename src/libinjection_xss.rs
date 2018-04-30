@@ -6,38 +6,37 @@
 #![allow(non_upper_case_globals)]
 
 use libinjection_html5::{h5_state_eof, h5_state, html5_flags, html5_type, libinjection_h5_init, libinjection_h5_next};
-use libc::{memchr};
+use libc::memchr;
 use libc::c_void;
 use std::slice;
 
 
 static mut gsHexDecodeMap: [i32; 256] = [
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 256, 256,
-256, 256, 256, 256, 256, 10, 11, 12, 13, 14, 15, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 10, 11, 12, 13, 14, 15, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
-256, 256, 256, 256
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 256, 256,
+    256, 256, 256, 256, 256, 10, 11, 12, 13, 14, 15, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 10, 11, 12, 13, 14, 15, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256
 ];
 
 #[derive(Clone, Copy, PartialEq)]
-#[repr(i32)]
 pub enum Attribute {
     TypeNone,
     TypeBlack,
@@ -47,13 +46,12 @@ pub enum Attribute {
 }
 
 #[derive(Copy)]
-#[repr(C)]
 pub struct stringtype<'a> {
     pub name: &'a [u8],
     pub atype: Attribute,
 }
 
-impl <'a> Clone for stringtype<'a> {
+impl<'a> Clone for stringtype<'a> {
     fn clone(&self) -> Self { *self }
 }
 
@@ -77,10 +75,8 @@ const X_STYLE: &[u8] = b"style";
 const X_TO: &[u8] = b"to";
 const X_VALUES: &[u8] = b"values";
 const X_XLINKHREF: &[u8] = b"xlink:href";
-const X_NONEY_McNONESTEIN: &[u8]  = b"zzzznone";
 
-
-const BLACKATTR: [stringtype; 21] = [
+const BLACKATTR: [stringtype; 20] = [
     stringtype { name: X_ACTION, atype: Attribute::TypeAttrUrl }, /* form */
     stringtype { name: X_ATTRIBUTENAME, atype: Attribute::TypeAttrIndirect }, /* SVG allow indirection of Attribute names */
     stringtype { name: X_BY, atype: Attribute::TypeAttrUrl }, /* SVG */
@@ -101,7 +97,6 @@ const BLACKATTR: [stringtype; 21] = [
     stringtype { name: X_TO, atype: Attribute::TypeAttrUrl }, /* SVG */
     stringtype { name: X_VALUES, atype: Attribute::TypeAttrUrl }, /* SVG */
     stringtype { name: X_XLINKHREF, atype: Attribute::TypeAttrUrl },
-    stringtype { name: X_NONEY_McNONESTEIN, atype: Attribute::TypeNone },
 ];
 
 const TAG_APPLET: &'static [u8] = b"applet";
@@ -162,8 +157,8 @@ const BLACKTAG: [&'static [u8]; 21] = [
 
 fn cstrcasecmp_with_null(mut a: *const u8, mut b: *const u8, mut n: usize) -> i32 {
     let mut _currentBlock;
-    let mut ca : u8;
-    let mut cb : u8;
+    let mut ca: u8;
+    let mut cb: u8;
     'loop1: loop {
         if !({
             let _old = n;
@@ -354,7 +349,8 @@ fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n: usize) -> i3
 }
 
 
-const VIEWSOURCE_URL: &[u8] = b"VIEW-SOURCE\0";  //todo: do we need these trailing nuls?
+const VIEWSOURCE_URL: &[u8] = b"VIEW-SOURCE\0";
+//todo: do we need these trailing nuls?
 const DATA_URL: &[u8] = b"DATA\0";
 const VBSCRIPT_URL: &[u8] = b"VBSCRIPT\0";
 const JAVASCRIPT_URL: &[u8] = b"JAVA\0";
@@ -382,7 +378,7 @@ fn is_black_url(mut s: *const u8, mut len: usize) -> i32 {
     }
 }
 
-extern fn is_black_attr(mut s: *const u8, mut len: usize) -> Attribute {
+fn is_black_attr(mut s: *const u8, mut len: usize) -> Attribute {
     let safe_s = unsafe { slice::from_raw_parts(s, len) };
     if len < 2usize {
         return Attribute::TypeNone;
@@ -409,18 +405,18 @@ extern fn is_black_attr(mut s: *const u8, mut len: usize) -> Attribute {
     }
 }
 
-extern fn is_black_tag(    mut s : *const u8, mut len : usize) -> i32 {
-    if len < 3 { return 0 }
+fn is_black_tag(mut s: *const u8, mut len: usize) -> i32 {
+    if len < 3 { return 0; }
     let safe_s = unsafe { slice::from_raw_parts(s, len) };
     let safe_s = safe_s.to_ascii_lowercase();
     let safe_s = safe_s.as_slice();
 
     if let Ok(index) = BLACKTAG.binary_search(&safe_s) {
-        return 1
+        return 1;
     }
 
     if safe_s.starts_with(b"svg") || safe_s.starts_with(b"xsl") {
-        return 1
+        return 1;
     }
     0i32
 }
@@ -428,7 +424,7 @@ extern fn is_black_tag(    mut s : *const u8, mut len : usize) -> i32 {
 #[no_mangle]
 pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_flags) -> i32 {
     let mut _currentBlock;
-    let mut h5 : h5_state = h5_state {
+    let mut h5: h5_state = h5_state {
         s: 0 as *const u8,
         len: 0,
         pos: 0,
@@ -438,7 +434,7 @@ pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_fl
         token_len: 0,
         token_type: html5_type::TAG_COMMENT,
     };
-    let mut attr : Attribute = Attribute::TypeNone;
+    let mut attr: Attribute = Attribute::TypeNone;
     libinjection_h5_init(&mut h5 as (*mut h5_state), s, len, flags);
     'loop1: loop {
         if libinjection_h5_next(&mut h5) == 0 {
@@ -453,16 +449,16 @@ pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_fl
             break;
         }
         if h5.token_type as (i32) == html5_type::TAG_NAME_OPEN as (i32) {
-            if is_black_tag(h5.token_start,h5.token_len) != 0 {
+            if is_black_tag(h5.token_start, h5.token_len) != 0 {
                 _currentBlock = 36;
                 break;
             }
         } else if h5.token_type as (i32) == html5_type::ATTR_NAME as (i32) {
-            attr = is_black_attr(h5.token_start,h5.token_len);
+            attr = is_black_attr(h5.token_start, h5.token_len);
         } else if h5.token_type as (i32) == html5_type::ATTR_VALUE as (i32) {
             if !(attr as (i32) == Attribute::TypeNone as (i32)) {
                 if attr as (i32) == Attribute::TypeAttrIndirect as (i32) {
-                    if is_black_attr(h5.token_start,h5.token_len) != Attribute::TypeNone {
+                    if is_black_attr(h5.token_start, h5.token_len) != Attribute::TypeNone {
                         _currentBlock = 32;
                         break;
                     }
@@ -472,7 +468,7 @@ pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_fl
                         break;
                     }
                     if attr as (i32) == Attribute::TypeAttrUrl as (i32) {
-                        if is_black_url(h5.token_start,h5.token_len) != 0 {
+                        if is_black_url(h5.token_start, h5.token_len) != 0 {
                             _currentBlock = 29;
                             break;
                         }
@@ -548,7 +544,7 @@ pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_fl
 }
 
 #[no_mangle]
-pub unsafe extern fn libinjection_xss(    mut s : *const u8, mut len : usize) -> i32 {
+pub fn libinjection_xss(mut s: *const u8, mut len: usize) -> i32 {
     if libinjection_is_xss(s, len, html5_flags::DATA_STATE) != 0 {
         1i32
     } else if libinjection_is_xss(s, len, html5_flags::VALUE_NO_QUOTE) != 0 {

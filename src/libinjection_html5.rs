@@ -43,7 +43,6 @@ pub enum html5_type {
 }
 
 #[derive(Copy)]
-#[repr(C)]
 pub struct h5_state {
     pub s: *const u8,
     pub len: usize,
@@ -54,6 +53,18 @@ pub struct h5_state {
     pub token_len: usize,
     pub token_type: html5_type,
 }
+
+pub struct h5_state_safe<'a> {
+    pub s: &'a [u8],
+    pub len: usize,
+    pub pos: usize,
+    pub is_close: i32,
+    pub state: fn(&mut h5_state) -> i32,
+    pub token_start: usize,
+    pub token_len: usize,
+    pub token_type: html5_type,
+}
+
 
 impl Clone for h5_state {
     fn clone(&self) -> Self { *self }
