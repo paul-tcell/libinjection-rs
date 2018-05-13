@@ -9,6 +9,8 @@ use libinjection_html5::{h5_state_eof, h5_state, html5_flags, html5_type, libinj
 use libc::memchr;
 use libc::c_void;
 use std::slice;
+use libinjection_html5::libinjection_h5_init_safe;
+use libinjection_html5::libinjection_h5_next_safe;
 
 static gsHexDecodeMap2: [Option<u8>; 256] = [
     None, None, None, None, None, None, None, None, None, None, None, None,
@@ -178,6 +180,36 @@ const BLACKTAG: [&'static [u8]; 21] = [
     TAG_ZZZZZNOTLISTED
 ];
 
+fn streq_ignore_case_ignore_nulls(a: &[u8], b: &[u8]) -> bool {
+    if b.len() < a.len() {
+        return false;
+    }
+    let mut i = 0;
+    for cb in b.iter() {
+        if cb == &0u8 {
+            continue;
+        }
+        if i == a.len() || a[i] != cb.to_ascii_lowercase() {
+            return false;
+        }
+        i += 1;
+    }
+    a.len() == i
+}
+
+#[test]
+fn test_streq_ignore_case_ignore_nulls() {
+    assert!(streq_ignore_case_ignore_nulls(b"abc", b"abc"));
+    assert!(!streq_ignore_case_ignore_nulls(b"abcdef", b"abc"));
+    assert!(!streq_ignore_case_ignore_nulls(b"abc", b"abcdef"));
+
+
+    assert!(streq_ignore_case_ignore_nulls(b"abc", b"a\0\0\0\0\0\0bc"));
+    assert!(!streq_ignore_case_ignore_nulls(b"a", b""));
+    assert!(!streq_ignore_case_ignore_nulls(b"", b"a"));
+
+}
+
 
 fn cstrcasecmp_with_null(mut a: *const u8, mut b: *const u8, mut n: usize) -> i32 {
     let mut _currentBlock;
@@ -230,25 +262,23 @@ fn change(sz: &mut usize) {
 
 
 fn html_decode_char_at_safe(src: &[u8], consumed: &mut usize) -> Option<u8> {
-
     if src.len() == 0 {
         *consumed = 0;
         return None;
     }
 
     *consumed = 1;
-    if src[0] == b'&' || src.len() < 2 {
+    if src[0] != b'&' || src.len() < 2 {
         return Some(src[0]);
     }
     if src[1] != b'#' {
         return Some(b'&');
     }
 
-
     if src[2] == b'x' || src[2] == b'X' {
-        let mut val;
+        let mut val: u32;
         if let Some(ch) = gsHexDecodeMap2[src[3] as usize] {
-            val = ch;
+            val = ch  as u32;
         } else {
             /* degenerate case  '&#[?]' */
             return Some(b'&');
@@ -258,14 +288,14 @@ fn html_decode_char_at_safe(src: &[u8], consumed: &mut usize) -> Option<u8> {
             let ch = src[i];
             if ch == b';' {
                 *consumed = i +1;
-                return Some(val);
+                return Some(val as u8);
             }
 
             if let Some(ch) = gsHexDecodeMap2[ch as usize] {
-                val = val * 16 + ch;
+                val = val * 16 + ch  as u32;
             } else {
                 *consumed = i;
-                return Some(val);
+                return Some(val as u8);
             }
             if val > 0x1000FF {
                 return Some(b'&');
@@ -273,26 +303,26 @@ fn html_decode_char_at_safe(src: &[u8], consumed: &mut usize) -> Option<u8> {
             i += 1;
         }
         *consumed = i;
-        return Some(val);
+        return Some(val as u8);
     } else {
         let mut i = 2;
         let ch = src[i];
         if ch < b'0' || ch > b'9' {
             return Some(b'&');
         }
-        let mut val = ch - b'0';
+        let mut val: u32 = (ch - b'0') as u32;
         i += 1;
         while i < src.len() {
             let ch = src[i];
             if ch == b';' {
                 *consumed = i + 1;
-                return Some(val);
+                return Some(val  as u8);
             }
             if ch < b'0' || ch > b'9' {
                 *consumed = i;
-                return Some(val);
+                return Some(val  as u8);
             }
-            val = (val * 10) + (ch - b'0');
+            val = (val * 10) + (ch - b'0')  as u32;
             if val > 0x1000FF {
                 return Some(b'&');
             }
@@ -302,7 +332,7 @@ fn html_decode_char_at_safe(src: &[u8], consumed: &mut usize) -> Option<u8> {
     None
 }
 
-unsafe fn html_decode_char_at(mut src: *const u8, mut len: usize, mut consumed: *mut usize) -> i32 {
+unsafe fn html_decode_char_at(src: *const u8, len: usize, mut consumed: *mut usize) -> i32 {
     let mut _currentBlock;
     let mut val: i32 = 0i32;  //todo unused assignment
     let mut i: usize;
@@ -404,6 +434,70 @@ unsafe fn html_decode_char_at(mut src: *const u8, mut len: usize, mut consumed: 
         })
     }
 }
+fn htmlencode_startswith_safe(a: &[u8], b: &[u8]) -> bool {
+    let mut consumed:usize = 0;
+    let mut first = true;
+
+    if b.len() < a.len() {
+        return false;
+    }
+    let mut a_pos = 0usize;
+    let mut b_pos = 0usize;
+    let mut countdown = b.len();
+    while countdown > 0 {
+        if a_pos >= a.len()  {
+            return true;
+        }
+        let ch = html_decode_char_at_safe(&b[b_pos..b.len()], &mut consumed);
+        b_pos += consumed;
+        countdown -= consumed;
+        if let Some(ch) = ch {
+            if first && ch < 32u8 {
+                continue;
+            }
+            first = false;
+            if ch == 0u8 {
+                continue;
+            }
+            if ch == 10u8 {
+                // vertical tab.  Why?
+                continue;
+            }
+            if a[a_pos] != ch.to_ascii_lowercase() {
+                return false;
+            }
+            a_pos +=1;
+        }
+    }
+    a_pos >= a.len()
+}
+
+#[test]
+fn test_sanity() {
+    let mut consumed:usize = 0;
+    let encoded = b"&#x56;&#x49;&#x45;&#x57;&#x2D;&#x53;&#x4F;&#x55;&#x52;&#x43;&#x45;";
+
+    let ch = unsafe { html_decode_char_at(encoded.as_ptr(), 66, &mut consumed) };
+    println!("{} {}", ch, consumed);
+}
+
+#[test]
+fn test_htmlencoded_starts_with() {
+    let upper_encoded = b"&#x56;&#x49;&#x45;&#x57;&#x2D;&#x53;&#x4F;&#x55;&#x52;&#x43;&#x45;";
+    assert!(htmlencode_startswith_safe(b"view-source", upper_encoded));
+    assert!(htmlencode_startswith_safe(b"v", upper_encoded));
+    assert!(htmlencode_startswith_safe(b"view-source", b"VIEW-SOURCE"));
+    assert!(htmlencode_startswith_safe(b"view-source", b"VIEW-\0SOURCE"));
+    assert!(!htmlencode_startswith_safe(b"view-sourc3", upper_encoded));
+    assert!(!htmlencode_startswith_safe(b"view-sourc3", b"\0\0\0"));
+    assert!(!htmlencode_startswith_safe(b"view-sourc3", b""));
+    //encoded null...
+    let upper_encoded = b"&#x56;&#x49;&#x45;&#x57;&#x00;&#x2D;&#x53;&#x4F;&#x55;&#x52;&#x43;&#x45;";
+    assert!(htmlencode_startswith_safe(b"view-source", upper_encoded));
+    let lower_encoded = b"&#x76;&#x69;&#x65;&#x77;&#x2D;&#x73;&#x6F;&#x75;&#x72;&#x63;&#x65;";
+    assert!(htmlencode_startswith_safe(b"view-source", lower_encoded));
+
+}
 
 fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n: usize) -> i32 {
     let mut _currentBlock;
@@ -452,10 +546,36 @@ fn htmlencode_startswith(mut a: *const u8, mut b: *const u8, mut n: usize) -> i3
 
 
 const VIEWSOURCE_URL: &[u8] = b"VIEW-SOURCE\0";
-//todo: do we need these trailing nuls?
 const DATA_URL: &[u8] = b"DATA\0";
 const VBSCRIPT_URL: &[u8] = b"VBSCRIPT\0";
 const JAVASCRIPT_URL: &[u8] = b"JAVA\0";
+
+const VIEWSOURCE_URL_LC: &[u8] = b"view-source";
+const DATA_URL_LC: &[u8] = b"data";
+const VBSCRIPT_URL_LC: &[u8] = b"vbscript";
+const JAVASCRIPT_URL_LC: &[u8] = b"java";
+
+
+fn is_black_url_safe(s: &[u8]) -> bool {
+    if s.len() == 0 {
+        return false;
+    }
+    let mut i = 0;
+    loop {
+        if i == s.len() {  //all whitespace
+            return false;
+        }
+        if s[i] > 32 || s[i] < 127 {
+            break;
+        }
+        i = i + 1;
+    }
+    let sub = &s[i..s.len()];
+    htmlencode_startswith_safe(VIEWSOURCE_URL_LC, sub) ||
+        htmlencode_startswith_safe(DATA_URL_LC, sub) ||
+        htmlencode_startswith_safe(VBSCRIPT_URL_LC, sub) ||
+        htmlencode_startswith_safe(JAVASCRIPT_URL_LC, sub)
+}
 
 fn is_black_url(mut s: *const u8, mut len: usize) -> i32 {
     'loop1: loop {
@@ -550,62 +670,51 @@ fn is_black_tag(mut s: *const u8, mut len: usize) -> i32 {
     0i32
 }
 
-fn is_black_tag_safe(safe_s: &[u8], mut len: usize) -> i32 {
-    if len < 3 { return 0; }
+fn is_black_tag_safe(safe_s: &[u8]) -> bool {
+    if safe_s.len() < 3 { return false }
     let safe_s = safe_s.to_ascii_lowercase();
     let safe_s = safe_s.as_slice();
 
     if let Ok(index) = BLACKTAG.binary_search(&safe_s) {
-        return 1;
+        return true;
     }
-
     if safe_s.starts_with(b"svg") || safe_s.starts_with(b"xsl") {
-        return 1;
+        return true;
     }
-    0i32
+    false
 }
 
-#[no_mangle]
-pub fn libinjection_is_xss_safe(mut s: *const u8, mut len: usize, mut flags: html5_flags) -> i32 {
-
-    let mut h5: h5_state = h5_state {
-        s: 0 as *const u8,
-        len: 0,
-        pos: 0,
-        is_close: 0,
-        state: h5_state_eof,
-        token_start: 0 as *const u8,
-        token_len: 0,
-        token_type: html5_type::TAG_COMMENT,
-    };
+pub fn libinjection_is_xss_safe(s: &[u8], flags: html5_flags) -> i32 {
     let mut attr: Attribute = Attribute::TypeNone;
-    libinjection_h5_init(&mut h5 as (*mut h5_state), s, len, flags);
+    let mut h5 = libinjection_h5_init_safe(s, flags);
     'loop1: loop {
-        if libinjection_h5_next(&mut h5) == 0 {
+        if libinjection_h5_next_safe(&mut h5) == 0 {
             return 0;
         }
         if h5.token_type != html5_type::ATTR_VALUE {
             attr = Attribute::TypeNone;
         }
+
+        let sub = &s[h5.token_start..h5.token_start+ h5.token_len];
         if h5.token_type == html5_type::DOCTYPE {
             return 1;
         } else if h5.token_type == html5_type::TAG_NAME_OPEN {
-            if is_black_tag(h5.token_start, h5.token_len) != 0 {
+            if is_black_tag_safe(sub)  {
                 return 1;
             }
         } else if h5.token_type == html5_type::ATTR_NAME {
-            attr = is_black_attr(h5.token_start, h5.token_len);
+            attr = is_black_attr_safe(sub);
         } else if h5.token_type == html5_type::ATTR_VALUE {
             match attr {
-                Attribute::TypeBlack => { return 1 }
+                Attribute::TypeBlack => { return 1; }
                 Attribute::TypeAttrUrl => {
-                    if is_black_url(h5.token_start, h5.token_len) != 0 {
+                    if is_black_url_safe(sub) {
                         return 1;
                     }
                 }
-                Attribute::TypeStyle => { return 1 }
+                Attribute::TypeStyle => { return 1; }
                 Attribute::TypeAttrIndirect => {
-                    if is_black_attr(h5.token_start, h5.token_len) != Attribute::TypeNone {
+                    if is_black_attr_safe(sub) != Attribute::TypeNone {
                         return 1;
                     }
                 }
@@ -613,28 +722,29 @@ pub fn libinjection_is_xss_safe(mut s: *const u8, mut len: usize, mut flags: htm
             }
             attr = Attribute::TypeNone;
         } else if h5.token_type as (i32) == html5_type::TAG_COMMENT as (i32) {
-            if unsafe { memchr(h5.token_start as (*const c_void), b'`' as (i32), h5.token_len) != 0i32 as (*mut c_void) } {
+            if sub.iter().position(|&b| b == b'`').is_some() {
                 return 1;
             }
-            unsafe {
-                if h5.token_len > 3usize {
-                    if *h5.token_start.offset(0isize) as (i32) == b'[' as (i32) &&
-                        (*h5.token_start.offset(1isize) as (i32) == b'i' as (i32) || *h5.token_start.offset(1isize) as (i32) == b'I' as (i32)) &&
-                        (*h5.token_start.offset(2isize) as (i32) == b'f' as (i32) || *h5.token_start.offset(2isize) as (i32) == b'F' as (i32)) {
-                        return 1;
-                    }
-                    if (*h5.token_start.offset(0isize) as (i32) == b'x' as (i32) || *h5.token_start.offset(0isize) as (i32) == b'X' as (i32)) &&
-                        (*h5.token_start.offset(1isize) as (i32) == b'm' as (i32) || *h5.token_start.offset(1isize) as (i32) == b'M' as (i32)) &&
-                        (*h5.token_start.offset(2isize) as (i32) == b'l' as (i32) || *h5.token_start.offset(2isize) as (i32) == b'L' as (i32)) {
-                        return 1;
-                    }
-                }
-            }
-            if !(h5.token_len > 5usize) {
-                if cstrcasecmp_with_null((*b"IMPORT\0").as_ptr(), h5.token_start, 6usize) == 0i32 {
+
+            /* IE conditional comment */
+            if h5.token_len > 3usize {
+                if sub[0usize] == b'[' &&
+                    (sub[1usize] == b'i' || sub[1usize] == b'I') &&
+                    (sub[2usize] == b'f' || sub[2usize] == b'F') {
                     return 1;
                 }
-                if cstrcasecmp_with_null((*b"ENTITY\0").as_ptr(), h5.token_start, 6usize) == 0i32 {
+                if (sub[0usize] == b'x' || sub[0usize] == b'X') &&
+                    (sub[1usize] == b'm' || sub[1usize] == b'M') &&
+                    (sub[2usize] == b'l' || sub[2usize] == b'L') {
+                    return 1;
+                }
+            }
+
+            if h5.token_len > 5usize {
+                if streq_ignore_case_ignore_nulls(b"import", &s[h5.token_start..6usize]) {
+                    return 1;
+                }
+                if streq_ignore_case_ignore_nulls(b"entity", &s[h5.token_start..6usize]) {
                     return 1;
                 }
             }
@@ -784,10 +894,11 @@ pub fn libinjection_xss(mut s: *const u8, mut len: usize) -> i32 {
 mod tests {
     use super::*;
 
-    //#[test]
+    #[test]
     fn test_is_xss_simple() {
         let test_html = "<script>alert(document.domain)</script>";
-        let is_xss = libinjection_is_xss(test_html.as_ptr() as *const u8, test_html.len(), html5_flags::DATA_STATE);
+        let is_xss = libinjection_is_xss_safe(test_html.as_bytes(), html5_flags::DATA_STATE);
+        //let is_xss = libinjection_is_xss(test_html.as_ptr() as *const u8, test_html.len(), html5_flags::DATA_STATE);
 
         println!("Is XSS? {}", is_xss == 1);
     }
