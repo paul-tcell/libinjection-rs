@@ -2,6 +2,7 @@
 name = "libinjection-rs"
 version = "0.1.0"
 authors = ["Paul Callahan <paul@tcell.io>"]
+auto-build-binaries = true
 
 [dependencies]
 memchr = "2.0.1"
@@ -11,3 +12,11 @@ libc = "*"
 [lib]
 name = "injection"
 crate-type = ["cdylib", "lib"]
+
+#[[bin]]
+#name = "tests"
+#path = "src/main.rs"
+
+[[bin]]
+name = "test_speed_xss"
+path = "src/bin/test_speed_xss.rs"
