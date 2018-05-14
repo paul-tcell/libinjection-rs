@@ -874,6 +874,22 @@ pub fn libinjection_is_xss(mut s: *const u8, mut len: usize, mut flags: html5_fl
     }
 }
 
+pub fn libinjection_xss_safe(s: &[u8]) -> i32 {
+    if libinjection_is_xss_safe(s, html5_flags::DATA_STATE) != 0 {
+        1i32
+    } else if libinjection_is_xss_safe(s, html5_flags::VALUE_NO_QUOTE) != 0 {
+        1i32
+    } else if libinjection_is_xss_safe(s, html5_flags::VALUE_SINGLE_QUOTE) != 0 {
+        1i32
+    } else if libinjection_is_xss_safe(s, html5_flags::VALUE_DOUBLE_QUOTE) != 0 {
+        1i32
+    } else if libinjection_is_xss_safe(s, html5_flags::VALUE_BACK_QUOTE) != 0 {
+        1i32
+    } else {
+        0i32
+    }
+}
+
 #[no_mangle]
 pub fn libinjection_xss(mut s: *const u8, mut len: usize) -> i32 {
     if libinjection_is_xss(s, len, html5_flags::DATA_STATE) != 0 {
