@@ -13,7 +13,6 @@ libc = "*"
 phf = "0.7.22"
 phf_codegen = "0.7.22"
 
-
 [lib]
 name = "injection"
 crate-type = ["cdylib", "lib"]
