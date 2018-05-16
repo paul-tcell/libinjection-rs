@@ -1,4 +1,3 @@
-extern crate memchr;
 extern crate libc;
 extern crate phf;
 
