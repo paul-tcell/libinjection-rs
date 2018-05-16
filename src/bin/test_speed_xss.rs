@@ -1,6 +1,6 @@
 extern crate libc;
 extern crate injection;
-use injection::libinjection_xss::libinjection_xss_safe;
+use injection::libinjection_xss::is_xss;
 
 mod ffi {
     extern {
@@ -51,7 +51,7 @@ fn test_is_xss() -> i32 {
         if i == imax {
             break;
         }
-        _dont_optimize_me_bro = libinjection_xss_safe(s[i % len ]);
+        _dont_optimize_me_bro = is_xss(s[i % len ]);
         i = i + 1;
     }
 

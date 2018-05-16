@@ -1,17 +1,17 @@
-const CHAR_EOF: i32 = -1;
-const CHAR_NULL: i32 = 0;
-const CHAR_BANG: i32 = 33;
-const CHAR_DOUBLE: i32 = 34;
-const CHAR_PERCENT: i32 = 37;
-const CHAR_SINGLE: i32 = 39;
-const CHAR_DASH: i32 = 45;
-const CHAR_SLASH: i32 = 47;
-const CHAR_LT: i32 = 60;
-const CHAR_EQUALS: i32 = 61;
-const CHAR_GT: i32 = 62;
-const CHAR_QUESTION: i32 = 63;
-const CHAR_RIGHTB: i32 = 93;
-const CHAR_TICK: i32 = 96;
+const CHAR_EOF: Option<u8> = None;
+const CHAR_NULL: u8 = 0;
+const CHAR_BANG: u8 = 33;
+const CHAR_DOUBLE: u8 = 34;
+const CHAR_PERCENT: u8 = 37;
+const CHAR_SINGLE: u8 = 39;
+const CHAR_DASH: u8 = 45;
+const CHAR_SLASH: u8 = 47;
+const CHAR_LT: u8 = 60;
+const CHAR_EQUALS: u8 = 61;
+const CHAR_GT: u8 = 62;
+const CHAR_QUESTION: u8 = 63;
+const CHAR_RIGHTB: u8 = 93;
+const CHAR_TICK: u8 = 96;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Html5Type {
@@ -28,18 +28,18 @@ pub enum Html5Type {
 }
 
 #[derive(Clone, Copy)]
-pub struct H5StateSafe<'a> {
+pub struct H5State<'a> {
     pub s: &'a [u8],
     pub len: usize,
     pub pos: usize,
     pub is_close: i32,
-    pub state: fn(&mut H5StateSafe) -> i32,
+    pub state: fn(&mut H5State) -> i32,
     pub token_start: usize,
     pub token_len: usize,
     pub token_type: Html5Type,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Html5Flags {
     DataState,
     ValueNoQuote,
@@ -48,50 +48,51 @@ pub enum Html5Flags {
     ValueBackQuote,
 }
 
-pub fn libinjection_h5_init_safe<'a>(s: &'a [u8], flags: Html5Flags) -> H5StateSafe {
-    let state: fn(&mut H5StateSafe) -> i32;
-    if flags as (i32) == Html5Flags::ValueBackQuote as (i32) {
-        state = h5_state_attribute_value_back_quote_safe;
-    } else if flags as (i32) == Html5Flags::ValueDoubleQuote as (i32) {
-        state = h5_state_attribute_value_double_quote_safe;
-    } else if flags as (i32) == Html5Flags::ValueSingleQuote as (i32) {
-        state = h5_state_attribute_value_single_quote_safe;
-    } else if flags as (i32) == Html5Flags::ValueNoQuote as (i32) {
-        state = h5_state_before_attribute_name_safe;
-    } else if flags as (i32) == Html5Flags::DataState as (i32) {
-        state = h5_state_data_safe;
-    } else {
-        state = h5_state_eof_safe;
-    }
+impl<'b> H5State<'b> {
+    pub fn new<'a>(s: &'a [u8], flags: Html5Flags) -> H5State {
+        let state: fn(&mut H5State) -> i32;
+        if flags == Html5Flags::ValueBackQuote {
+            state = h5_state_attribute_value_back_quote;
+        } else if flags == Html5Flags::ValueDoubleQuote {
+            state = h5_state_attribute_value_double_quote;
+        } else if flags == Html5Flags::ValueSingleQuote {
+            state = h5_state_attribute_value_single_quote;
+        } else if flags == Html5Flags::ValueNoQuote {
+            state = h5_state_before_attribute_name;
+        } else if flags == Html5Flags::DataState {
+            state = h5_state_data;
+        } else {
+            state = h5_state_eof;
+        }
 
-    H5StateSafe {
-        s: s,
-        len: s.len(),
-        pos: 0,
-        is_close: 0,
-        state: state,
-        token_start: 0,
-        token_len: 0,
-        token_type: Html5Type::DataText,
+        H5State {
+            s: s,
+            len: s.len(),
+            pos: 0,
+            is_close: 0,
+            state: state,
+            token_start: 0,
+            token_len: 0,
+            token_type: Html5Type::DataText,
+        }
+    }
+    pub fn next(&mut self) -> i32 {
+        (self.state)(self)
     }
 }
 
-pub fn libinjection_h5_next_safe(hs: &mut H5StateSafe) -> i32 {
-    (hs.state)(hs)
-}
-
-pub fn h5_state_eof_safe(_hs: &mut H5StateSafe) -> i32 {
+fn h5_state_eof(_hs: &mut H5State) -> i32 {
     0i32
 }
 
-fn h5_state_data_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_data(hs: &mut H5State) -> i32 {
     if hs.len < hs.pos {
-        panic!("{} in {}:{} function: {}", "hs->len < hs->pos", file!(), line!(), "h5_state_data");
+        panic!("{}:{} function: {} hs->len ({}) < hs->pos ({}", file!(), line!(), "h5_state_data", hs.len, hs.pos);
     } else if hs.len == hs.pos {
         hs.token_start = hs.pos;
         hs.token_len = hs.len.wrapping_sub(hs.pos);
         hs.token_type = Html5Type::DataText;
-        hs.state = h5_state_eof_safe;
+        hs.state = h5_state_eof;
         if hs.token_len == 0usize {
             return 0i32;
         } else {
@@ -99,18 +100,18 @@ fn h5_state_data_safe(hs: &mut H5StateSafe) -> i32 {
         }
     }
 
-
-//             1         2        3
-//   01234567890123456789012345678012
-//   alert(documentXdomain)</script>
-//  "<script>alert(documentXdomain)</script>\000"
+    //   char rulers :)
+    //             1         2        3
+    //   01234567890123456789012345678012
+    //   alert(documentXdomain)</script>
+    //  "<script>alert(documentXdomain)</script>\000"
     let sub_s: &[u8] = &(hs.s)[hs.pos..hs.len];
     match sub_s.iter().position(|&b| b == CHAR_LT as u8) {
         None => {
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::DataText;
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             if hs.token_len == 0usize {
                 return 0i32;
             }
@@ -121,9 +122,9 @@ fn h5_state_data_safe(hs: &mut H5StateSafe) -> i32 {
             hs.token_type = Html5Type::DataText;
             hs.token_len = idx;
             hs.pos = abs_index + 1;
-            hs.state = h5_state_tag_open_safe;
+            hs.state = h5_state_tag_open;
             if hs.token_len == 0usize {
-                return h5_state_tag_open_safe(hs);
+                return h5_state_tag_open(hs);
             }
         }
     }
@@ -131,81 +132,81 @@ fn h5_state_data_safe(hs: &mut H5StateSafe) -> i32 {
     1i32
 }
 
-fn h5_state_tag_open_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_tag_open(hs: &mut H5State) -> i32 {
     let ch: u8;
     if hs.pos >= hs.len {
         return 0i32;
     }
     ch = hs.s[hs.pos];
-    if ch as (i32) == CHAR_BANG {
+    if ch == CHAR_BANG {
         hs.pos = hs.pos.wrapping_add(1usize);
-        return h5_state_markup_declaration_open_safe(hs);
-    } else if ch as (i32) == CHAR_SLASH {
+        return h5_state_markup_declaration_open(hs);
+    } else if ch == CHAR_SLASH {
         hs.pos = hs.pos.wrapping_add(1usize);
         hs.is_close = 1i32;
-        return h5_state_end_tag_open_safe(hs);
-    } else if ch as (i32) == CHAR_QUESTION {
+        return h5_state_end_tag_open(hs);
+    } else if ch == CHAR_QUESTION {
         hs.pos = hs.pos.wrapping_add(1usize);
-        return h5_state_bogus_comment_safe(hs);
-    } else if ch as (i32) == CHAR_PERCENT {
+        return h5_state_bogus_comment(hs);
+    } else if ch == CHAR_PERCENT {
         hs.pos = hs.pos.wrapping_add(1usize);
-        return h5_state_bogus_comment2_safe(hs);
-    } else if ch as (i32) >= b'a' as (i32) && (ch as (i32) <= b'z' as (i32)) ||
-        ch as (i32) >= b'A' as (i32) && (ch as (i32) <= b'Z' as (i32)) {
-        return h5_state_tag_name_safe(hs);
-    } else if ch as (i32) == CHAR_NULL {
-        return h5_state_tag_name_safe(hs);
+        return h5_state_bogus_comment2(hs);
+    } else if ch >= b'a' && (ch <= b'z') ||
+        ch >= b'A' && (ch <= b'Z') {
+        return h5_state_tag_name(hs);
+    } else if ch == CHAR_NULL {
+        return h5_state_tag_name(hs);
     } else {
         if hs.pos == 0usize {
-            return h5_state_data_safe(hs);
+            return h5_state_data(hs);
         }
         hs.token_start = hs.pos.wrapping_sub(1);
         hs.token_len = 1usize;
         hs.token_type = Html5Type::DataText;
-        hs.state = h5_state_data_safe;
+        hs.state = h5_state_data;
         return 1i32;
     }
 }
 
-fn h5_state_end_tag_open_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_end_tag_open(hs: &mut H5State) -> i32 {
     let ch: u8;
     if hs.pos >= hs.len {
         0i32
     } else {
         ch = hs.s[hs.pos];
-        if ch as (i32) == CHAR_GT {
-            h5_state_data_safe(hs)
-        } else if ch as (i32) >= b'a' as (i32) && (ch as (i32) <= b'z' as (i32)) || ch as (i32) >= b'A' as (i32) && (ch as (i32) <= b'Z' as (i32)) {
-            h5_state_tag_name_safe(hs)
+        if ch == CHAR_GT {
+            h5_state_data(hs)
+        } else if ch >= b'a' && (ch <= b'z') || ch >= b'A' && (ch <= b'Z') {
+            h5_state_tag_name(hs)
         } else {
             hs.is_close = 0i32;
-            h5_state_bogus_comment_safe(hs)
+            h5_state_bogus_comment(hs)
         }
     }
 }
 
 fn h5_is_white(ch: u8) -> i32 {
     match ch {
-        b' ' | b'\t'| b'\n'| b'\x0B'| b'\x0C'| b'\r'| b'\0' => 1,
+        b' ' | b'\t' | b'\n' | b'\x0B' | b'\x0C' | b'\r' | b'\0' => 1,
         _ => 0
     }
 }
 
-fn h5_state_tag_name_close_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_tag_name_close(hs: &mut H5State) -> i32 {
     hs.is_close = 0i32;
     hs.token_start = hs.pos;
     hs.token_len = 1usize;
     hs.token_type = Html5Type::TagNameClose;
     hs.pos = hs.pos.wrapping_add(1usize);
     if hs.pos < hs.len {
-        hs.state = h5_state_data_safe;
+        hs.state = h5_state_data;
     } else {
-        hs.state = h5_state_eof_safe;
+        hs.state = h5_state_eof;
     }
     1i32
 }
 
-fn h5_state_tag_name_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_tag_name(hs: &mut H5State) -> i32 {
     let mut _current_block;
     let mut ch: u8;
     let mut pos: usize;
@@ -216,18 +217,18 @@ fn h5_state_tag_name_safe(hs: &mut H5StateSafe) -> i32 {
             break;
         }
         ch = hs.s[pos];
-        if ch as (i32) == 0i32 {
+        if ch == CHAR_NULL {
             pos = pos.wrapping_add(1usize);
         } else {
             if h5_is_white(ch) != 0 {
                 _current_block = 13;
                 break;
             }
-            if ch as (i32) == CHAR_SLASH {
+            if ch == CHAR_SLASH {
                 _current_block = 12;
                 break;
             }
-            if ch as (i32) == 62i32 {
+            if ch == CHAR_GT {
                 _current_block = 8;
                 break;
             }
@@ -238,7 +239,7 @@ fn h5_state_tag_name_safe(hs: &mut H5StateSafe) -> i32 {
         hs.token_start = hs.pos;
         hs.token_len = hs.len.wrapping_sub(hs.pos);
         hs.token_type = Html5Type::TagNameOpen;
-        hs.state = h5_state_eof_safe;
+        hs.state = h5_state_eof;
         1i32
     } else if _current_block == 8 {
         hs.token_start = hs.pos;
@@ -247,11 +248,11 @@ fn h5_state_tag_name_safe(hs: &mut H5StateSafe) -> i32 {
             hs.pos = pos.wrapping_add(1usize);
             hs.is_close = 0i32;
             hs.token_type = Html5Type::TagClose;
-            hs.state = h5_state_data_safe;
+            hs.state = h5_state_data;
         } else {
             hs.pos = pos;
             hs.token_type = Html5Type::TagNameOpen;
-            hs.state = h5_state_tag_name_close_safe;
+            hs.state = h5_state_tag_name_close;
         }
         1i32
     } else if _current_block == 12 {
@@ -259,19 +260,19 @@ fn h5_state_tag_name_safe(hs: &mut H5StateSafe) -> i32 {
         hs.token_len = pos.wrapping_sub(hs.pos);
         hs.token_type = Html5Type::TagNameOpen;
         hs.pos = pos.wrapping_add(1usize);
-        hs.state = h5_state_self_closing_start_tag_safe;
+        hs.state = h5_state_self_closing_start_tag;
         1i32
     } else {
         hs.token_start = hs.pos;
         hs.token_len = pos.wrapping_sub(hs.pos);
         hs.token_type = Html5Type::TagNameOpen;
         hs.pos = pos.wrapping_add(1usize);
-        hs.state = h5_state_before_attribute_name_safe;
+        hs.state = h5_state_before_attribute_name;
         1i32
     }
 }
 
-fn h5_skip_white_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_skip_white(hs: &mut H5State) -> Option<u8> {
     while hs.pos < hs.len {
         let ch = hs.s[hs.pos];
         match ch {
@@ -281,34 +282,37 @@ fn h5_skip_white_safe(hs: &mut H5StateSafe) -> i32 {
                 // hs.pos += 1;
             }
             _ => {
-                return ch as i32;
+                return Some(ch);
             }
         }
     }
     return CHAR_EOF;
 }
 
-fn h5_state_before_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
-    let ch: i32;
-    ch = h5_skip_white_safe(hs);
-    if ch == 62i32 {
-        hs.state = h5_state_data_safe;
-        hs.token_start = hs.pos;
-        hs.token_len = 1usize;
-        hs.token_type = Html5Type::TagNameClose;
-        hs.pos = hs.pos.wrapping_add(1usize);
-        1i32
-    } else if ch == CHAR_SLASH {
-        hs.pos = hs.pos.wrapping_add(1usize);
-        h5_state_self_closing_start_tag_safe(hs)
-    } else if ch == -1i32 {
-        0i32
-    } else {
-        h5_state_attribute_name_safe(hs)
+fn h5_state_before_attribute_name(hs: &mut H5State) -> i32 {
+    match h5_skip_white(hs) {
+        Some(ch) if ch == CHAR_GT => {
+            hs.state = h5_state_data;
+            hs.token_start = hs.pos;
+            hs.token_len = 1usize;
+            hs.token_type = Html5Type::TagNameClose;
+            hs.pos = hs.pos.wrapping_add(1usize);
+            1i32
+        }
+        Some(ch) if ch == CHAR_SLASH => {
+            hs.pos = hs.pos.wrapping_add(1usize);
+            h5_state_self_closing_start_tag(hs)
+        }
+        None => {
+            0i32
+        }
+        _ => {
+            h5_state_attribute_name(hs)
+        }
     }
 }
 
-fn h5_state_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_attribute_name(hs: &mut H5State) -> i32 {
     let mut ch: u8;
     let mut pos: usize;
     pos = hs.pos.wrapping_add(1usize);
@@ -317,7 +321,7 @@ fn h5_state_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrName;
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             hs.pos = hs.len;
             return 1i32;
         }
@@ -326,31 +330,31 @@ fn h5_state_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
             hs.token_start = hs.pos;
             hs.token_len = pos.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrName;
-            hs.state = h5_state_after_attribute_name_safe;
+            hs.state = h5_state_after_attribute_name;
             hs.pos = pos.wrapping_add(1usize);
             return 1i32;
         }
-        if ch as (i32) == CHAR_SLASH {
+        if ch == CHAR_SLASH {
             hs.token_start = hs.pos;
             hs.token_len = pos.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrName;
-            hs.state = h5_state_self_closing_start_tag_safe;
+            hs.state = h5_state_self_closing_start_tag;
             hs.pos = pos.wrapping_add(1usize);
             return 1i32;
         }
-        if ch as (i32) == CHAR_EQUALS {
+        if ch == CHAR_EQUALS {
             hs.token_start = hs.pos;
             hs.token_len = pos.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrName;
-            hs.state = h5_state_before_attribute_value_safe;
+            hs.state = h5_state_before_attribute_value;
             hs.pos = pos.wrapping_add(1usize);
             return 1i32;
         }
-        if ch as (i32) == 62i32 {
+        if ch == CHAR_GT {
             hs.token_start = hs.pos;
             hs.token_len = pos.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrName;
-            hs.state = h5_state_tag_name_close_safe;
+            hs.state = h5_state_tag_name_close;
             hs.pos = pos;
             return 1i32;
         }
@@ -358,43 +362,51 @@ fn h5_state_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
     }
 }
 
-fn h5_state_after_attribute_name_safe(hs: &mut H5StateSafe) -> i32 {
-    let c: i32;
-    c = h5_skip_white_safe(hs);
-    if c == 62i32 {
-        h5_state_tag_name_close_safe(hs)
-    } else if c == CHAR_EQUALS {
-        hs.pos = hs.pos.wrapping_add(1usize);
-        h5_state_before_attribute_value_safe(hs)
-    } else if c == CHAR_SLASH {
-        hs.pos = hs.pos.wrapping_add(1usize);
-        h5_state_self_closing_start_tag_safe(hs)
-    } else if c == -1i32 {
-        0i32
-    } else {
-        h5_state_attribute_name_safe(hs)
+fn h5_state_after_attribute_name(hs: &mut H5State) -> i32 {
+    match h5_skip_white(hs) {
+        Some(c) if c == CHAR_GT => {
+            h5_state_tag_name_close(hs)
+        }
+        Some(c) if c == CHAR_EQUALS => {
+            hs.pos = hs.pos.wrapping_add(1usize);
+            h5_state_before_attribute_value(hs)
+        }
+        Some(c) if c == CHAR_SLASH => {
+            hs.pos = hs.pos.wrapping_add(1usize);
+            h5_state_self_closing_start_tag(hs)
+        }
+        None => {
+            0i32
+        }
+        _ => {
+            h5_state_attribute_name(hs)
+        }
     }
 }
 
 
-fn h5_state_before_attribute_value_safe(hs: &mut H5StateSafe) -> i32 {
-    let c: i32;
-    c = h5_skip_white_safe(hs);
-    if c == -1i32 {
-        hs.state = h5_state_eof_safe;
-        0i32
-    } else if c == CHAR_DOUBLE {
-        h5_state_attribute_value_double_quote_safe(hs)
-    } else if c == CHAR_SINGLE {
-        h5_state_attribute_value_single_quote_safe(hs)
-    } else if c == CHAR_TICK {
-        h5_state_attribute_value_back_quote_safe(hs)
-    } else {
-        h5_state_attribute_value_no_quote_safe(hs)
+fn h5_state_before_attribute_value(hs: &mut H5State) -> i32 {
+    match h5_skip_white(hs) {
+        None => {
+            hs.state = h5_state_eof;
+            0i32
+        }
+        Some(c) if c == CHAR_DOUBLE => {
+            h5_state_attribute_value_double_quote(hs)
+        }
+        Some(c) if c == CHAR_SINGLE => {
+            h5_state_attribute_value_single_quote(hs)
+        }
+        Some(c) if c == CHAR_TICK => {
+            h5_state_attribute_value_back_quote(hs)
+        }
+        _ => {
+            h5_state_attribute_value_no_quote(hs)
+        }
     }
 }
 
-fn h5_state_attribute_value_quote_safe(hs: &mut H5StateSafe, qchar: u8) -> i32 {
+fn h5_state_attribute_value_quote(hs: &mut H5State, qchar: u8) -> i32 {
     if hs.pos > 0 {
         hs.pos += 1;
     }
@@ -404,14 +416,14 @@ fn h5_state_attribute_value_quote_safe(hs: &mut H5StateSafe, qchar: u8) -> i32 {
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::AttrValue;
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
         }
         Some(idx) => {
             //idx is the relative offset, need abs
             hs.token_start = hs.pos;
             hs.token_len = idx; //(idx - hs->s) - hs->pos + hs->pos
             hs.token_type = Html5Type::AttrValue;
-            hs.state = h5_state_after_attribute_value_quoted_state_safe;
+            hs.state = h5_state_after_attribute_value_quoted_state;
             hs.pos += hs.token_len + 1;
         }
     }
@@ -419,20 +431,20 @@ fn h5_state_attribute_value_quote_safe(hs: &mut H5StateSafe, qchar: u8) -> i32 {
 }
 
 
-fn h5_state_attribute_value_double_quote_safe(hs: &mut H5StateSafe) -> i32 {
-    h5_state_attribute_value_quote_safe(hs, 34u8)
+fn h5_state_attribute_value_double_quote(hs: &mut H5State) -> i32 {
+    h5_state_attribute_value_quote(hs, 34u8)
 }
 
-fn h5_state_attribute_value_single_quote_safe(hs: &mut H5StateSafe) -> i32 {
-    h5_state_attribute_value_quote_safe(hs, 39u8)
+fn h5_state_attribute_value_single_quote(hs: &mut H5State) -> i32 {
+    h5_state_attribute_value_quote(hs, 39u8)
 }
 
-fn h5_state_attribute_value_back_quote_safe(hs: &mut H5StateSafe) -> i32 {
-    h5_state_attribute_value_quote_safe(hs, 96u8)
+fn h5_state_attribute_value_back_quote(hs: &mut H5State) -> i32 {
+    h5_state_attribute_value_quote(hs, 96u8)
 }
 
 
-fn h5_state_attribute_value_no_quote_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_attribute_value_no_quote(hs: &mut H5State) -> i32 {
     let mut _current_block;
     let mut ch: u8;
     let mut pos: usize;
@@ -447,14 +459,14 @@ fn h5_state_attribute_value_no_quote_safe(hs: &mut H5StateSafe) -> i32 {
             _current_block = 7;
             break;
         }
-        if ch as (i32) == 62i32 {
+        if ch == CHAR_GT {
             _current_block = 6;
             break;
         }
         pos = pos.wrapping_add(1usize);
     }
     if _current_block == 2 {
-        hs.state = h5_state_eof_safe;
+        hs.state = h5_state_eof;
         hs.token_start = hs.pos;
         hs.token_len = hs.len.wrapping_sub(hs.pos);
         hs.token_type = Html5Type::AttrValue;
@@ -464,19 +476,19 @@ fn h5_state_attribute_value_no_quote_safe(hs: &mut H5StateSafe) -> i32 {
         hs.token_start = hs.pos;
         hs.token_len = pos.wrapping_sub(hs.pos);
         hs.pos = pos;
-        hs.state = h5_state_tag_name_close_safe;
+        hs.state = h5_state_tag_name_close;
         1i32
     } else {
         hs.token_type = Html5Type::AttrValue;
         hs.token_start = hs.pos;
         hs.token_len = pos.wrapping_sub(hs.pos);
         hs.pos = pos.wrapping_add(1usize);
-        hs.state = h5_state_before_attribute_name_safe;
+        hs.state = h5_state_before_attribute_name;
         1i32
     }
 }
 
-fn h5_state_after_attribute_value_quoted_state_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_after_attribute_value_quoted_state(hs: &mut H5State) -> i32 {
     let ch: u8;
     if hs.pos >= hs.len {
         0i32
@@ -484,68 +496,68 @@ fn h5_state_after_attribute_value_quoted_state_safe(hs: &mut H5StateSafe) -> i32
         ch = hs.s[hs.pos];
         (if h5_is_white(ch) != 0 {
             hs.pos = hs.pos.wrapping_add(1usize);
-            h5_state_before_attribute_name_safe(hs)
-        } else if ch as (i32) == CHAR_SLASH {
+            h5_state_before_attribute_name(hs)
+        } else if ch == CHAR_SLASH {
             hs.pos = hs.pos.wrapping_add(1usize);
-            h5_state_self_closing_start_tag_safe(hs)
-        } else if ch as (i32) == 62i32 {
+            h5_state_self_closing_start_tag(hs)
+        } else if ch == CHAR_GT {
             hs.token_start = hs.pos;
             hs.token_len = 1usize;
             hs.token_type = Html5Type::TagNameClose;
             hs.pos = hs.pos.wrapping_add(1usize);
-            hs.state = h5_state_data_safe;
+            hs.state = h5_state_data;
             1i32
         } else {
-            h5_state_before_attribute_name_safe(hs)
+            h5_state_before_attribute_name(hs)
         })
     }
 }
 
-fn h5_state_self_closing_start_tag_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_self_closing_start_tag(hs: &mut H5State) -> i32 {
     let ch: u8;
     if hs.pos >= hs.len {
         0i32
     } else {
         ch = hs.s[hs.pos];
-        (if ch as (i32) == 62i32 {
+        (if ch == CHAR_GT {
             if hs.pos > 0usize {
                 0i32;
             } else {
-                panic!("{} in {}:{} function: {}", "hs->pos > 0", file!(), line!(), "h5_state_self_closing_start_tag");
+                panic!("{}:{} function: {} hs->len ({}) > 0 ... hs->pos ({}", file!(), line!(), "h5_state_self_closing_start_tag", hs.len, hs.pos);
             }
             hs.token_start = hs.pos - 1;
             hs.token_len = 2usize;
             hs.token_type = Html5Type::TagNameSelfclose;
-            hs.state = h5_state_data_safe;
+            hs.state = h5_state_data;
             hs.pos = hs.pos.wrapping_add(1usize);
             1i32
         } else {
-            h5_state_before_attribute_name_safe(hs)
+            h5_state_before_attribute_name(hs)
         })
     }
 }
 
-fn h5_state_bogus_comment_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_bogus_comment(hs: &mut H5State) -> i32 {
     let sub_s: &[u8] = &(hs.s)[hs.pos..hs.len];
     match sub_s.iter().position(|&b| b == CHAR_GT as u8) {
         None => {
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.pos = hs.len;
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
         }
         Some(idx) => {  //idx + hs.pos is the absolute index
             hs.token_start = hs.pos;
             hs.token_len = idx;
             hs.pos = idx + hs.pos + 1;
-            hs.state = h5_state_data_safe;
+            hs.state = h5_state_data;
         }
     }
     hs.token_type = Html5Type::TagComment;
     1i32
 }
 
-fn h5_state_bogus_comment2_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_bogus_comment2(hs: &mut H5State) -> i32 {
     let mut pos: usize;
     pos = hs.pos;
     'loop1: loop {
@@ -557,12 +569,12 @@ fn h5_state_bogus_comment2_safe(hs: &mut H5StateSafe) -> i32 {
             hs.token_len = hs.len - hs.pos;
             hs.pos = hs.len;
             hs.token_type = Html5Type::TagComment;
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             return 1;
         }
         let abs_idx = idx.unwrap() + hs.pos;
 
-        if hs.s[abs_idx + 1] as i32 != CHAR_GT {
+        if hs.s[abs_idx + 1] != CHAR_GT {
             pos = abs_idx + 1;
             continue;
         }
@@ -570,13 +582,13 @@ fn h5_state_bogus_comment2_safe(hs: &mut H5StateSafe) -> i32 {
         hs.token_start = hs.pos;
         hs.token_len = abs_idx - hs.pos;
         hs.pos = abs_idx + 2;
-        hs.state = h5_state_data_safe;
+        hs.state = h5_state_data;
         hs.token_type = Html5Type::TagComment;
         return 1;
     }
 }
 
-fn h5_state_markup_declaration_open_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_markup_declaration_open(hs: &mut H5State) -> i32 {
     let remaining: usize;
     remaining = hs.len.wrapping_sub(hs.pos);
     if remaining >= 7usize
@@ -587,7 +599,7 @@ fn h5_state_markup_declaration_open_safe(hs: &mut H5StateSafe) -> i32 {
         && (hs.s[hs.pos.wrapping_add(4usize)] == b'Y' || hs.s[hs.pos.wrapping_add(4usize)] == b'y')
         && (hs.s[hs.pos.wrapping_add(5usize)] == b'P' || hs.s[hs.pos.wrapping_add(5usize)] == b'p')
         && (hs.s[hs.pos.wrapping_add(6usize)] == b'E' || hs.s[hs.pos.wrapping_add(6usize)] == b'e') {
-        return h5_state_doctype_safe(hs);
+        return h5_state_doctype(hs);
     } else if remaining >= 7usize
         && hs.s[hs.pos.wrapping_add(0usize)] == b'['
         && hs.s[hs.pos.wrapping_add(1usize)] == b'C'
@@ -597,19 +609,19 @@ fn h5_state_markup_declaration_open_safe(hs: &mut H5StateSafe) -> i32 {
         && hs.s[hs.pos.wrapping_add(5usize)] == b'A'
         && hs.s[hs.pos.wrapping_add(6usize)] == b'[' {
         hs.pos = hs.pos.wrapping_add(7usize);
-        return h5_state_cdata_safe(hs);
+        return h5_state_cdata(hs);
     } else if remaining >= 2usize
         && hs.s[hs.pos.wrapping_add(0usize)] == b'-'
         && hs.s[hs.pos.wrapping_add(1usize)] == b'-' {
         hs.pos = hs.pos.wrapping_add(2usize);
-        return h5_state_comment_safe(hs);
+        return h5_state_comment(hs);
     }
-    return h5_state_bogus_comment_safe(hs);
+    return h5_state_bogus_comment(hs);
 }
 
 
 //pmc - rewrote - h5_state_comment_see orig
-fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
+fn h5_state_comment(hs: &mut H5State) -> i32
 {
     let mut ch: u8;
     let mut pos: usize;
@@ -625,7 +637,7 @@ fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
         //idxo.unwrap() + hs.pos is the absolute index
         /* did not find anything or has less than 3 chars left */
         if idxo.is_none() || (idxo.unwrap() + pos) > hs.len - 3 {
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::TagComment;
@@ -635,11 +647,11 @@ fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
         offset = 1usize;
 
         /* skip all nulls */ //loop3'
-        while idx + offset < end && hs.s[idx + offset] as i32 == CHAR_NULL {
+        while idx + offset < end && hs.s[idx + offset] == CHAR_NULL {
             offset = offset.wrapping_add(1usize);
         }
         if idx + offset == end { //block 12
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::TagComment;
@@ -647,29 +659,18 @@ fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
         }
 
         ch = hs.s[idx + offset];
-        if ch as (i32) != CHAR_DASH && (ch as (i32) != CHAR_BANG) {
+        if ch != CHAR_DASH && (ch != CHAR_BANG) {
             pos = idx + 1;
             continue;
         }
 
-        /* need to test */
-//#if 0
-//        /* skip all nulls */
-//        while (idx + offset < end && *(idx + offset) == 0) {
-//            offset += 1;
-//        }
-//        if (idx + offset == end) {
-//            hs->state = h5_state_eof;
-//            hs->token_start = hs->s + hs->pos;
-//            hs->token_len = hs->len - hs->pos;
-//            hs->token_type = TagComment;
-//            return 1;
-//        }
-//#endif
+        //#if 0
+        // removed -  see libinjection_html5.c
+        //#endif
 
         offset = offset.wrapping_add(1usize);
         if idx + offset == end {  //block 10
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             hs.token_start = hs.pos;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
             hs.token_type = Html5Type::TagComment;
@@ -678,7 +679,7 @@ fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
 
 
         ch = hs.s[idx + offset];
-        if ch as (i32) != CHAR_GT { //not block 8
+        if ch != CHAR_GT { //not block 8
             pos = idx + 1;
             continue;
         }
@@ -688,14 +689,14 @@ fn h5_state_comment_safe(hs: &mut H5StateSafe) -> i32
         hs.token_start = hs.pos;
         hs.token_len = idx - hs.pos;
         hs.pos = idx + offset;
-        hs.state = h5_state_data_safe;
+        hs.state = h5_state_data;
         hs.token_type = Html5Type::TagComment;
         return 1;
     }
 }
 
 
-fn h5_state_cdata_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_cdata(hs: &mut H5State) -> i32 {
     let mut pos: usize;
     pos = hs.pos;
     'loop1: loop {
@@ -703,21 +704,21 @@ fn h5_state_cdata_safe(hs: &mut H5StateSafe) -> i32 {
         let idx = sub_s.iter().position(|&b| b == CHAR_RIGHTB as u8);
         match idx {
             None => {
-                hs.state = h5_state_eof_safe;
+                hs.state = h5_state_eof;
                 hs.token_start = hs.pos;
                 hs.token_len = hs.len.wrapping_sub(hs.pos);
                 hs.token_type = Html5Type::DataText;
                 return 1i32;
             }
             Some(idx) if idx + pos > (hs.len + 3) => {
-                hs.state = h5_state_eof_safe;
+                hs.state = h5_state_eof;
                 hs.token_start = hs.pos;
                 hs.token_len = hs.len.wrapping_sub(hs.pos);
                 hs.token_type = Html5Type::DataText;
                 return 1i32;
             }
-            Some(idx) if sub_s[idx + 1] as i32 == CHAR_RIGHTB && sub_s[idx + 2] as i32 == CHAR_GT => {
-                hs.state = h5_state_data_safe;
+            Some(idx) if sub_s[idx + 1] == CHAR_RIGHTB && sub_s[idx + 2] == CHAR_GT => {
+                hs.state = h5_state_data;
                 hs.token_start = hs.pos;
                 hs.token_len = idx + pos - hs.pos;
                 hs.pos = idx + pos + 3;
@@ -731,46 +732,22 @@ fn h5_state_cdata_safe(hs: &mut H5StateSafe) -> i32 {
     }
 }
 
-fn h5_state_doctype_safe(hs: &mut H5StateSafe) -> i32 {
+fn h5_state_doctype(hs: &mut H5State) -> i32 {
     hs.token_start = hs.pos;
     hs.token_type = Html5Type::DocType;
     let sub_s: &[u8] = &(hs.s)[hs.pos..hs.len];
     match sub_s.iter().position(|&b| b == CHAR_GT as u8) {
         None => {
-            hs.state = h5_state_eof_safe;
+            hs.state = h5_state_eof;
             hs.token_len = hs.len.wrapping_sub(hs.pos);
         }
         Some(idx) => { //idx + hs.pos is the absolute index, hs.pos -hs.pos cancel each other out
-            hs.state = h5_state_data_safe;
+            hs.state = h5_state_data;
             hs.token_len = idx;
             hs.pos = idx + hs.pos + 1;
         }
     }
     1i32
-}
-
-fn h5_type_to_string(t: Html5Type) -> String {
-    let s = match t {
-        Html5Type::DataText => "DataText",
-        Html5Type::TagNameOpen => "TagNameOpen",
-        Html5Type::TagNameClose => "TagNameClose",
-        Html5Type::TagNameSelfclose => "TagNameSelfclose",
-        Html5Type::TagData => "TagData",
-        Html5Type::TagClose => "TagClose",
-        Html5Type::AttrName => "AttrName",
-        Html5Type::AttrValue => "AttrValue",
-        Html5Type::TagComment => "TagComment",
-        Html5Type::DocType => "DOCTYPE"
-    };
-    s.to_string()
-}
-
-fn print_html5_token_safe(hs: &H5StateSafe) {
-    let seg = &hs.s[hs.token_start..hs.token_len + hs.token_start];
-    let seg = String::from_utf8_lossy(seg);
-    let type_ = h5_type_to_string(hs.token_type);
-
-    println!("{}, {}, {:?}", type_, hs.token_len, seg);
 }
 
 #[cfg(test)]
@@ -780,12 +757,38 @@ mod tests {
 
     #[derive(Clone)]
     pub struct Both<'a> {
-        hs_safe: H5StateSafe<'a>,
+        hs_safe: H5State<'a>,
         //hs_unsafe: h5_state,
     }
 
+    fn print_html5_token(hs: &H5State) {
+        let seg = &hs.s[hs.token_start..hs.token_len + hs.token_start];
+        let seg = String::from_utf8_lossy(seg);
+        let type_ = h5_type_to_string(hs.token_type);
+
+        println!("{}, {}, {:?}", type_, hs.token_len, seg);
+    }
+
+    #[allow(dead_code)]
+    fn h5_type_to_string(t: Html5Type) -> String {
+        let s = match t {
+            Html5Type::DataText => "DataText",
+            Html5Type::TagNameOpen => "TagNameOpen",
+            Html5Type::TagNameClose => "TagNameClose",
+            Html5Type::TagNameSelfclose => "TagNameSelfclose",
+            Html5Type::TagData => "TagData",
+            Html5Type::TagClose => "TagClose",
+            Html5Type::AttrName => "AttrName",
+            Html5Type::AttrValue => "AttrValue",
+            Html5Type::TagComment => "TagComment",
+            Html5Type::DocType => "DOCTYPE"
+        };
+        s.to_string()
+    }
+
+
     fn test_init<'a>(s: &'a [u8], flags: Html5Flags) -> Both {
-        let hs_safe = libinjection_h5_init_safe(s, flags);
+        let hs_safe = H5State::new(s, flags);
 
 //        let mut hs_unsafe = h5_state {
 //            s: ptr::null(),
@@ -799,11 +802,11 @@ mod tests {
 //        };
 //        let hs_unsafe_ptr = hs_unsafe.borrow_mut() as *mut h5_state;
 //        libinjection_h5_init(hs_unsafe_ptr, s.as_ptr() as *const u8, s.len(), html5_flags::DataState);
-        Both { hs_safe: hs_safe, /*hs_unsafe: hs_unsafe*/ }
+        Both { hs_safe: hs_safe /*hs_unsafe: hs_unsafe*/ }
     }
 
-    fn test_next_token(hs: &mut Both) -> i32 {
-        let safe_next = libinjection_h5_next_safe(&mut hs.hs_safe);
+    fn test_next_token(both: &mut Both) -> i32 {
+        let safe_next = both.hs_safe.next();
         //let unsafe_next = libinjection_h5_next(&mut hs.hs_unsafe);
         //assert_eq!(safe_next, unsafe_next);
         safe_next
@@ -855,11 +858,11 @@ mod tests {
 //    }
 
     #[test]
-    fn test_html_parse_safe() {
+    fn test_html_parse() {
         let test_html = "<script>alert(documentXdomain)</script>";
-        let mut hs_safe = libinjection_h5_init_safe(test_html.as_bytes(), Html5Flags::DataState);
-        while libinjection_h5_next_safe(&mut hs_safe) == 1 {
-            print_html5_token_safe(&hs_safe);
+        let mut hs_safe = H5State::new(test_html.as_bytes(), Html5Flags::DataState);
+        while hs_safe.next() == 1 {
+            print_html5_token(&hs_safe);
         }
     }
 

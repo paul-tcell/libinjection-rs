@@ -5,18 +5,15 @@ authors = ["Paul Callahan <paul@tcell.io>"]
 auto-build-binaries = true
 
 [dependencies]
+#cssparser-macros = "0.3.3"
+#procedural-masquerade = "0.1.5"
+#cssparser = "0.23.7"
 memchr = "2.0.1"
 libc = "*"
+phf = "0.7.22"
+phf_codegen = "0.7.22"
 
 
 [lib]
 name = "injection"
 crate-type = ["cdylib", "lib"]
-
-#[[bin]]
-#name = "tests"
-#path = "src/main.rs"
-
-[[bin]]
-name = "test_speed_xss"
-path = "src/bin/test_speed_xss.rs"
